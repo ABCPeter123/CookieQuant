@@ -2698,7 +2698,7 @@
           book.feesDollars += price * fee * filled;
           book.trades++;
           book.nativeProfit = Number(market.profit) || 0;
-          book.lastAction = `Bought ${filled} ${good.symbol || good.name || good.id} at ${price.toFixed(2)} + ${(fee*100).toFixed(2)}%`;
+          book.lastAction = `Bought ${filled} ${good.symbol || good.name || good.id} at $${price.toFixed(2)} + ${(fee*100).toFixed(2)}%`;
           saveControls();
           return true;
         }
@@ -2775,10 +2775,10 @@
           }
           toolkit.stockRows=signals.map(r=>{
             const p=book.positions[r.good.id];
-            return `${r.good.symbol||r.good.name}: ${r.price.toFixed(2)}; forecast ${r.horizon}t ${r.mean.toFixed(2)} `+
-              `(5th percentile ${r.low.toFixed(2)}); modeled fee-profit chance ${(100*r.win).toFixed(0)}%\n`+
-              `10t ${r.at10.toFixed(2)} / 20t ${r.at20.toFixed(2)}; held ${r.good.stock}, target ${plan.targets[r.good.id]}; `+
-              (p?.unknown?"managed; historical cost/profit unknown":p?`fee-inclusive basis ${(p.dollarCost/p.quantity).toFixed(2)}`:"no position");
+            return `${r.good.symbol||r.good.name}: $${r.price.toFixed(2)}; forecast ${r.horizon}t $${r.mean.toFixed(2)} `+
+              `(5th percentile $${r.low.toFixed(2)}); modeled fee-profit chance ${(100*r.win).toFixed(0)}%\n`+
+              `10t $${r.at10.toFixed(2)} / 20t $${r.at20.toFixed(2)}; held ${r.good.stock}, target ${plan.targets[r.good.id]}; `+
+              (p?.unknown?"managed; historical cost/profit unknown":p?`fee-inclusive basis $${(p.dollarCost/p.quantity).toFixed(2)}`:"no position");
           });
           toolkit.stockStatus=`Tick ${market.ticks}; 256 joint scenarios, ${Number(controls.stockHorizon)||15}-tick horizon. `+
             `Modeled portfolio return ${(plan.expected*100).toFixed(2)}%; worst-5% average loss ${(plan.risk*100).toFixed(2)}%. `+
@@ -6095,7 +6095,7 @@
             const stockBook = controls.stockBook;
             const signedStock = n => `${n < 0 ? "-" : "+"}${compactNumber(Math.abs(n || 0))}`;
             panel.querySelector("#cct-stock-status").textContent = toolkit.stockStatus + (stockBook
-              ? ` Tracked realized: ${signedStock(stockBook.realizedCookies)} cookies / ${signedStock(stockBook.realizedDollars)}. Purchase fees: ${compactNumber(stockBook.feesDollars)}. Trades: ${stockBook.trades}. ${stockBook.lastAction}` : "");
+              ? ` Tracked realized: ${signedStock(stockBook.realizedCookies)} cookies / $${signedStock(stockBook.realizedDollars)}. Purchase fees: $${compactNumber(stockBook.feesDollars)}. Trades: ${stockBook.trades}. ${stockBook.lastAction}` : "");
             panel.querySelector("#cct-stock-rows").textContent = toolkit.stockRows.join("\n");
       
             midgameProfileInput.checked =
