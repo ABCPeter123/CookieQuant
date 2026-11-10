@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b0e13" />
+  <meta name="description" content="Interactive research dashboard for CookieQuant: Monte Carlo stock forecasts, risk-aware portfolio optimization, Garden breeding and combo automation." />
+  <meta property="og:title" content="CookieQuant | Algorithm Research Terminal" />
+  <meta property="og:description" content="Explore the algorithms behind an automated Cookie Clicker trading system." />
+  <title>CookieQuant | Research Terminal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <aside class="rail" aria-label="Primary navigation">
+      <a class="rail-logo" href="#top" aria-label="CookieQuant home"><span class="logo-glyph">C<span class="logo-dot">.</span></span></a>
+      <div class="rail-group">
+        <a href="#top" class="rail-link active" title="Overview" aria-label="Overview"><span class="rail-icon">⌂</span><span class="rail-link-text">Overview</span></a>
+        <a href="#market" class="rail-link" title="Market lab" aria-label="Market lab"><span class="rail-icon">⌁</span><span class="rail-link-text">Market lab</span></a>
+        <a href="#method" class="rail-link" title="Methodology" aria-label="Methodology"><span class="rail-icon">◫</span><span class="rail-link-text">Method</span></a>
+        <a href="#systems" class="rail-link" title="Other systems" aria-label="Other systems"><span class="rail-icon">✳</span><span class="rail-link-text">Systems</span></a>
+      </div>
+      <div class="rail-end"><span class="rail-build">v1.0</span><a href="https://github.com/ABCPeter123/CookieQuant" target="_blank" rel="noopener noreferrer" title="View source code" aria-label="Source on GitHub">↗</a></div>
+    </aside>
+
+    <div class="main-layout" id="top">
+      <header class="topbar">
+        <div class="topbar-breadcrumb"><span class="crumb-root">CQ<span class="crumb-slash">/</span>RESEARCH</span><span class="crumb-sep">/</span><span>THE TERMINAL</span></div>
+        <div class="topbar-actions"><span class="status-label"><span class="status-pulse"></span> MODEL ONLINE</span><span class="topbar-divider"></span><a class="source-link" href="https://github.com/ABCPeter123/CookieQuant" target="_blank" rel="noopener noreferrer">VIEW SOURCE <span>↗</span></a></div>
+      </header>
+
+      <main class="content">
+        <section class="hero">
+          <div class="hero-copy">
+            <div class="eyebrow"><span class="tiny-sparkle">✳</span> COOKIEQUANT / RESEARCH LAB <span class="eyebrow-line"></span> 001</div>
+            <h1>Big cookies.<br /><em>Bigger models.</em></h1>
+            <p>An interactive look inside a Cookie Clicker automation engine. Monte Carlo forecasting, risk-aware trading, and a surprisingly serious approach to making imaginary money.</p>
+            <div class="hero-buttons"><a class="button-primary" href="#market">EXPLORE THE TRADING ENGINE <span>↗</span></a><a class="button-ghost" href="https://github.com/ABCPeter123/CookieQuant" target="_blank" rel="noopener noreferrer">SOURCE CODE <span>↗</span></a></div>
+          </div>
+          <div class="hero-feature" aria-label="Simulation overview">
+            <div class="feature-corner top-left"></div><div class="feature-corner bottom-right"></div>
+            <div class="feature-top"><span>ENGINE STATUS / <strong>RUNNING</strong></span><span class="feature-pixels">▦ ▤ ▧</span></div>
+            <div class="feature-orbit"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="orbit orbit-c"></div><div class="orbit-center"><span class="orbit-symbol">◈</span><span>256</span><small>JOINT PATHS</small></div><span class="orbit-point point-a"></span><span class="orbit-point point-b"></span><span class="orbit-point point-c"></span></div>
+            <div class="feature-bottom"><span>STOCHASTIC ENGINE</span><span>MC / 02.058</span></div>
+          </div>
+        </section>
+
+        <div class="notice" role="note"><span class="notice-icon">ⓘ</span><strong>INTERACTIVE RESEARCH DEMO</strong><span>This page runs synthetic market states locally in your browser. It uses CookieQuant's modeling approach, not your live game save or actual trades.</span><span class="notice-index">SIM / 001</span></div>
+
+        <section id="market" class="section market-section">
+          <div class="section-kicker">01 <span>/</span> THE MAIN EVENT</div>
+          <div class="section-heading-row"><div><h2>Market <em>intelligence.</em></h2><p>Simulate the next 10–20 market ticks, then let the optimizer pick a portfolio.</p></div><div class="section-heading-right"><span class="small-system-icon">⌁</span><span>STOCHASTIC<br/>MARKET ENGINE</span></div></div>
+          <div class="metric-grid">
+            <article class="metric-card"><div class="metric-head"><span>MODELLED RETURN</span><span class="metric-icon">↗</span></div><strong id="stat-return" class="metric-number mint">...</strong><span id="stat-return-sub" class="metric-foot">EXPECTED / NEXT 15 TICKS</span></article>
+            <article class="metric-card"><div class="metric-head"><span>TAIL RISK (CVaR)</span><span class="metric-icon">◇</span></div><strong id="stat-risk" class="metric-number">...</strong><span class="metric-foot">AVG. LOSS / WORST 5% OF PATHS</span></article>
+            <article class="metric-card"><div class="metric-head"><span>BUY SIGNALS</span><span class="metric-icon">◈</span></div><strong id="stat-signals" class="metric-number">...</strong><span class="metric-foot">FEE + CONFIDENCE FILTERED</span></article>
+            <article class="metric-card"><div class="metric-head"><span>CAPITAL DEPLOYED</span><span class="metric-icon">▥</span></div><strong id="stat-capital" class="metric-number">...</strong><span class="metric-foot">WITHIN THE TRADING BUDGET</span></article>
+          </div>
+
+          <div class="terminal-grid">
+            <article class="panel forecast-panel">
+              <div class="panel-top"><div><div class="mini-label">01.1 / PRICE FORECAST</div><h3>Inside the possible futures<span class="title-mark">.</span></h3><p>Each thin line is one simulated future. The shaded band contains the central 90% of outcomes.</p></div><div class="panel-badge">256 SCENARIOS</div></div>
+              <div id="asset-pills" class="asset-pills" role="group" aria-label="Choose stock to inspect"></div>
+              <div class="plot-head"><div><strong id="selected-name">Chocolate</strong><span id="selected-regime">FAST RISE REGIME</span></div><div class="plot-summary"><span>PRICE NOW <strong id="plot-current">$0.00</strong></span><span>EXPECTED <strong id="plot-expected">$0.00</strong></span></div></div>
+              <div class="chart-wrap"><canvas id="forecast-chart" aria-label="Monte Carlo forecast probability fan chart" role="img"></canvas></div>
+              <div class="chart-legend"><span><i class="legend-line"></i> MEAN PATH</span><span><i class="legend-band"></i> 5TH–95TH PERCENTILE</span><span><i class="legend-dotted"></i> SAMPLE SIMULATIONS</span></div>
+              <div class="forecast-bottom"><span>FORECAST DISTRIBUTION</span><div><span>5% <strong id="plot-low">$0</strong></span><span>MEAN <strong id="plot-mean">$0</strong></span><span>95% <strong id="plot-high">$0</strong></span></div></div>
+            </article>
+            <aside class="panel settings-panel">
+              <div class="mini-label">01.2 / MODEL CONTROLS</div><h3>Run the numbers.</h3><p>Adjust the assumptions. Each run recomputes all simulated price paths and portfolio decisions.</p>
+              <div class="control-group"><div class="control-head"><label>FORECAST HORIZON</label><output id="horizon-out">15 TICKS</output></div><div id="horizon-options" class="segment-control" role="group" aria-label="Forecast horizon"><button data-horizon="10">10T</button><button data-horizon="15" class="selected">15T</button><button data-horizon="20">20T</button></div></div>
+              <div class="control-group"><div class="control-head"><label for="risk">MAXIMUM TAIL RISK</label><output id="risk-out">5%</output></div><input id="risk" type="range" min="1" max="25" value="5" /><div class="range-ends"><span>CONSERVATIVE</span><span>AGGRESSIVE</span></div></div>
+              <div class="control-group"><div class="control-head"><label for="budget">TRADING BUDGET</label><output id="budget-out">85%</output></div><input id="budget" type="range" min="10" max="100" step="5" value="85" /><div class="range-ends"><span>10% CAPITAL</span><span>100% CAPITAL</span></div></div>
+              <div class="model-explainer"><span class="explainer-asterisk">✳</span><div><strong>Why the 5% cutoff?</strong><p>CookieQuant evaluates average losses in the worst 5% of simulated outcomes, not only the average projected gain.</p></div></div>
+              <div class="run-meta"><span>SEED <strong id="seed-label">4317</strong></span><span>256 JOINT PATHS</span></div>
+              <button id="rerun" class="button-run">GENERATE NEW MARKET <span>↗</span></button>
+              <span class="settings-footnote">DETERMINISTIC FOR A GIVEN SEED · NO LIVE ORDERS</span>
+            </aside>
+          </div>
+
+          <div class="analysis-grid">
+            <article class="panel allocation-panel">
+              <div class="mini-label">01.3 / PORTFOLIO CONSTRUCTION</div><div class="analysis-title"><h3>Where the capital goes.</h3><span class="mono-note">RISK-AWARE GREEDY ALLOCATION</span></div>
+              <div class="allocation-bar" id="allocation-bar" aria-label="Portfolio allocation"></div>
+              <div id="allocation-list" class="allocation-list"></div>
+              <div class="allocation-footer"><span>CAPITAL BUFFER <strong id="capital-buffer">...</strong></span><span>DISCRETE OPTIMIZATION <strong id="iteration-count">...</strong></span></div>
+            </article>
+            <article class="panel signals-panel">
+              <div class="mini-label">01.4 / TRADE DECISION TABLE</div><div class="analysis-title"><h3>The signal board.</h3><span class="mono-note">SELECT A ROW TO INSPECT</span></div>
+              <div class="table-scroll"><table class="signal-table"><thead><tr><th>ASSET</th><th>SPOT</th><th>MEAN</th><th>WIN %</th><th>ACTION</th></tr></thead><tbody id="signals-body"></tbody></table></div>
+              <div class="signal-foot"><span class="foot-dot"></span> Buy requires positive modeled edge after fee, margin, and uncertainty checks.</div>
+            </article>
+          </div>
+        </section>
+
+        <section id="method" class="section method-section">
+          <div class="section-kicker">02 <span>/</span> THE ENGINE ROOM</div>
+          <div class="section-heading-row"><div><h2>Not a guess. <em>A process.</em></h2><p>The four steps behind the market agent, from raw game state to a transaction.</p></div></div>
+          <div class="process-grid">
+            <article class="process-card"><span class="process-index">01 / OBSERVE</span><div class="process-icon">⌗</div><h3>Read the state</h3><p>Capture prices, market regimes, trend deltas, resting values, brokerage fees, and available bank capital.</p><div class="process-footer">GAME STATE → MODEL INPUT</div></article>
+            <article class="process-card"><span class="process-index">02 / SIMULATE</span><div class="process-icon">⟁</div><h3>Forecast 256 futures</h3><p>Roll forward joint stochastic paths. Preserve shared market shocks and estimate return distributions.</p><div class="process-footer">JOINT MONTE CARLO</div></article>
+            <article class="process-card"><span class="process-index">03 / OPTIMIZE</span><div class="process-icon">▦</div><h3>Constrain the downside</h3><p>Find discrete allocations that improve expected log growth while respecting a tail-loss ceiling.</p><div class="process-footer">LOG GROWTH + EXPECTED SHORTFALL</div></article>
+            <article class="process-card"><span class="process-index">04 / EXECUTE</span><div class="process-icon">⇄</div><h3>Trade, then reconcile</h3><p>Place fee-aware orders once per native market tick. Track cost basis, unknown positions, and realized results.</p><div class="process-footer">CONTROLLED STATE TRANSITIONS</div></article>
+          </div>
+          <div class="formula-strip"><div><span>OBJECTIVE FUNCTION</span><strong>E[log(1 + R)] − 0.5 × CVaR₉₅</strong></div><div><span>SUBJECT TO</span><strong>CVaR₉₅ ≤ YOUR RISK LIMIT</strong></div><a href="https://github.com/ABCPeter123/CookieQuant/blob/main/src/cookie-quant.js" target="_blank" rel="noopener noreferrer">INSPECT IMPLEMENTATION ↗</a></div>
+        </section>
+
+        <section id="systems" class="section systems-section">
+          <div class="section-kicker">03 <span>/</span> BEYOND THE MARKET</div>
+          <div class="section-heading-row"><div><h2>More than <em>a trader.</em></h2><p>A few other autonomous systems, explained without the 6,000-line source file.</p></div><div class="section-heading-right"><span class="small-system-icon">✳</span><span>OTHER<br/>ALGORITHMS</span></div></div>
+          <div class="systems-grid">
+            <article class="panel garden-card">
+              <div class="mini-label">GARDEN ENGINE / BREEDING SCHEDULER</div><h3>Growing a smarter garden.</h3><p>The solver arranges parent plants, aligns maturity windows, then switches soil to improve mutation opportunities.</p>
+              <div class="garden-visual"><div class="garden-heading"><span>BREEDING GRID / 6×6</span><span class="garden-state" id="garden-status">PHASE 01 / PLANTED</span></div><div class="garden-content"><div id="garden-grid" class="garden-grid" aria-label="Illustrative Garden breeding layout"></div><div class="garden-side"><div class="garden-side-label">TARGET</div><strong>JUICY<br/>QUEENBEET</strong><div class="garden-divider"></div><span class="garden-side-label">TIMING</span><span id="garden-message" class="garden-message">Synchronizing parents for overlapping maturity.</span><button id="garden-step" class="small-action">NEXT PHASE →</button></div></div><div class="garden-key"><span><i class="seed parent"></i> QUEENBEET</span><span><i class="seed mutation"></i> TARGET</span><span><i class="seed empty"></i> OPEN TILE</span></div></div>
+            </article>
+            <article class="panel combo-card">
+              <div class="mini-label">COMBO ENGINE / DISCRETE COST OPTIMIZER</div><h3>The Godzamok problem.</h3><p>Sell buildings during a click multiplier, collect the bonus, then rebuild. The question is whether the extra cookies outweigh the cost.</p>
+              <div class="combo-data"><div><span>BUILDINGS SOLD</span><strong id="combo-count">230</strong></div><div><span>ESTIMATED MULTIPLIER</span><strong id="combo-multiplier">3.30×</strong></div></div>
+              <label class="combo-slider-label" for="combo-range">SIMULATE A BIGGER SACRIFICE</label><input id="combo-range" type="range" min="50" max="500" step="10" value="230" />
+              <div class="combo-visual"><div class="combo-track-label"><span>MODELED EXTRA CLICKS</span><span id="combo-gross">0</span></div><div class="progress-track"><div class="progress-fill gross" id="combo-gross-bar"></div></div><div class="combo-track-label"><span>EST. SELL / REBUY LOSS</span><span id="combo-cost">0</span></div><div class="progress-track"><div class="progress-fill cost" id="combo-cost-bar"></div></div></div>
+              <div class="combo-result"><span>ESTIMATED NET</span><strong id="combo-net">...</strong></div><span class="system-caption">Illustrative parameters. The actual agent computes building-specific round-trip prices and measures realized outcomes.</span>
+            </article>
+            <article class="panel ascension-card">
+              <div class="mini-label">PRESTIGE ENGINE / STATE MACHINE</div><div class="ascension-row"><div><h3>Ascend. Rebuild. Repeat.</h3><p>Stages encode prestige targets and unlock priorities. Automatic ascension has a separate safety arm.</p></div><div class="ascension-glyph">↟</div></div>
+              <div id="ascension-stages" class="ascension-stages" role="group" aria-label="Choose prestige stage"></div>
+              <div class="ascension-details"><div><span>SELECTED ASCENSION</span><strong id="ascension-title">Fourth ascension</strong></div><div><span>GUIDE COST</span><strong id="ascension-cost">62,217</strong></div></div>
+              <div class="ascension-detail-foot" id="ascension-rewards">PRIORITY: HALO GLOVES · LASTING FORTUNE · LUCKY DIGIT</div>
+            </article>
+          </div>
+        </section>
+
+        <footer class="footer"><div><span class="footer-brand">CQ<span>.</span></span><span>Built for the love of algorithms and the pursuit of very large cookies.</span></div><div><a href="https://github.com/ABCPeter123/CookieQuant" target="_blank" rel="noopener noreferrer">GITHUB ↗</a><a href="https://raw.githubusercontent.com/ABCPeter123/CookieQuant/main/dist/cookie-quant.user.js" target="_blank" rel="noopener noreferrer">INSTALL SCRIPT ↗</a><span>COOKIEQUANT / 2026</span></div></footer>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
