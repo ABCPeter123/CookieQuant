@@ -54,7 +54,7 @@ test('dashboard exposes live and demo without storing keys in source',async()=>{
  assert.match(app,/initCloudTelemetry\(\)/);
  assert.match(src,/sessionStorage\.setItem\('cookiequant:viewer'/);
  assert.match(src,/synthetic|Demo mode/);
- assert.match(src,/Actual market prices/);
+ assert.match(src,/Actual prices/);
  assert.doesNotMatch(src,/dk7g2myHx/);
  assert.doesNotMatch(src,/dqC-lw0X/);
 });
