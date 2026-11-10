@@ -130,9 +130,9 @@ function renderLive() {
   }
   const rangeLabel=cloud.historyRange==='all'?'all time':cloud.historyRange.toUpperCase();
   const shown=cloud.history.length;
-  const total=cloud.historyLoaded===cloud.historyRange?cloud.historyTotal:shown;
+  const historicalCount=cloud.historyLoaded===cloud.historyRange?cloud.historyTotal:shown;
   el('stock-caption').textContent=goods.length
-    ?'Actual prices · '+shown+' chart points from '+number(total,0)+' recorded snapshots ('+rangeLabel+'). Forecast mean and 5th/95th percentile appear at the right edge. The underlying history is retained without expiration.'
+    ?'Actual prices · '+shown+' chart points from '+number(historicalCount,0)+' recorded snapshots ('+rangeLabel+'). Forecast mean and 5th/95th percentile appear at the right edge. The underlying history is retained without expiration.'
     :'Bank minigame not available yet.';
   renderGraph();
 }
