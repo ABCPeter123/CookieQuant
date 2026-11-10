@@ -1,6 +1,8 @@
 /* Cloud telemetry UI. No writer credential or game-control API is bundled here. */
 const CLOUD_ENDPOINT = '/api/live';
-const cloud = { key: sessionStorage.getItem('cookiequant:viewer') || '', latest: null, history: [], timer: null, active: false, selected: null };
+const CLOUD_HISTORY_ENDPOINT = '/api/history';
+const HISTORY_RANGES = ['24h', '7d', '30d', '1y', 'all'];
+const cloud = { key: sessionStorage.getItem('cookiequant:viewer') || '', latest: null, history: [], timer: null, active: false, selected: null, historyRange: '24h', historyLoaded: '', historyLastFetched: 0, historyTotal: 0, historyRequest: 0 };
 
 const cloudCss = `
 .telemetry-box{margin:0 0 18px;background:#121c1d;border:1px solid #345148;border-radius:5px;overflow:hidden}
@@ -12,7 +14,8 @@ const cloudCss = `
 .telemetry-status{padding:0 23px 18px;color:#90a599;font:11px/1.55 'IBM Plex Mono',monospace}.telemetry-status.error{color:#ffa59c}
 .telemetry-live{display:none;padding:21px 23px 25px}.telemetry-live.visible{display:block}.telemetry-live .subhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.telemetry-live .subhead strong{font:600 24px 'Space Grotesk',sans-serif}.telemetry-live .subhead span{font:10px 'IBM Plex Mono',monospace;color:#91a69b}
 .telemetry-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.telemetry-kpi{border:1px solid #2a3934;background:#182423;padding:15px}.telemetry-kpi label{display:block;font:9px 'IBM Plex Mono',monospace;color:#8fa89d}.telemetry-kpi strong{display:block;font:650 23px 'Space Grotesk',sans-serif;margin:10px 0 6px;color:#e8f5e9}.telemetry-kpi small{font:10px 'IBM Plex Mono',monospace;color:#7e9589}
-.telemetry-cols{display:grid;grid-template-columns:1.4fr 1fr;gap:13px;margin-top:13px}.telemetry-surface{background:#121b20;border:1px solid #2d3a3c;padding:19px;min-width:0}.telemetry-surface h4{font:600 17px 'Space Grotesk',sans-serif;margin:0 0 13px}.telemetry-surface p{font:11px/1.6 'IBM Plex Mono',monospace;color:#8fa8a3}.telemetry-stock-picker{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}.telemetry-stock-picker button{padding:8px 10px;border:1px solid #31443b;background:#1c2828;color:#92a59b;font:600 10px 'IBM Plex Mono',monospace}.telemetry-stock-picker button.selected{background:#b7f4ba;color:#152219}.telemetry-chart{width:100%;height:210px;display:block}
+.telemetry-cols{display:grid;grid-template-columns:1.4fr 1fr;gap:13px;margin-top:13px}.telemetry-surface{background:#121b20;border:1px solid #2d3a3c;padding:19px;min-width:0}.telemetry-surface h4{font:600 17px 'Space Grotesk',sans-serif;margin:0 0 13px}.telemetry-surface p{font:11px/1.6 'IBM Plex Mono',monospace;color:#8fa8a3}.telemetry-ranges{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 14px}.telemetry-ranges button{padding:8px 11px;border:1px solid #30443a;background:#182522;color:#91a69b;font:600 10px 'IBM Plex Mono',monospace}.telemetry-ranges button.active{color:#152219;background:#b7f4ba;border-color:#b7f4ba}
+.telemetry-stock-picker{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}.telemetry-stock-picker button{padding:8px 10px;border:1px solid #31443b;background:#1c2828;color:#92a59b;font:600 10px 'IBM Plex Mono',monospace}.telemetry-stock-picker button.selected{background:#b7f4ba;color:#152219}.telemetry-chart{width:100%;height:210px;display:block}
 .telemetry-stock-table{width:100%;border-collapse:collapse;font:11px 'IBM Plex Mono',monospace}.telemetry-stock-table th{text-align:left;color:#89998e;font-size:9px;border-bottom:1px solid #35423b;padding:10px 5px}.telemetry-stock-table td{border-bottom:1px solid #25352e;padding:10px 5px}.telemetry-stock-table tr[data-stock]{cursor:pointer}.telemetry-stock-table tr[data-stock]:hover{background:#21322d}.telemetry-stock-table .positive{color:#b7f4ba}.telemetry-stock-table .negative{color:#f1a39b}
 .telemetry-modules{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:13px}.telemetry-module{background:#131e1d;border:1px solid #304038;padding:14px;min-width:0}.telemetry-module strong{display:block;color:#b7f4ba;font:600 10px 'IBM Plex Mono',monospace;margin-bottom:9px}.telemetry-module span{font:11px/1.5 'DM Sans',sans-serif;color:#a4b7aa;overflow-wrap:anywhere}
 .telemetry-help{padding:17px 23px;background:#10191a;border-top:1px solid #304038}.telemetry-help summary{font:11px 'IBM Plex Mono',monospace;color:#b7f4ba;cursor:pointer}.telemetry-help p{font:12px/1.65 'DM Sans',sans-serif;color:#8fa599}.telemetry-writer{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.telemetry-live-note{font:10px/1.6 'IBM Plex Mono',monospace;color:#82988c;margin-top:12px}
@@ -36,7 +39,8 @@ async function fetchLive(showErrors = true) {
     if (response.status === 401) throw Error('Incorrect viewer key. Your game is not affected.');
     if (!response.ok) throw Error('Telemetry API returned HTTP '+response.status);
     const data = await response.json();
-    cloud.latest=data.latest;cloud.history=data.history||[];
+    cloud.latest=data.latest;
+    if (cloud.historyLoaded !== cloud.historyRange) cloud.history=data.history||[];
     const fresh=isFresh();
     el('light').className='telemetry-light '+(fresh?'on':cloud.latest?'stale':'');
     if(!cloud.latest) status('Authenticated. No telemetry received yet. Enable the publisher in your Cookie Clicker console.');
@@ -45,13 +49,42 @@ async function fetchLive(showErrors = true) {
       ' · 30-second refresh');
     el('live').classList.add('visible');
     renderLive();
+    if (cloud.historyLoaded !== cloud.historyRange || Date.now() - cloud.historyLastFetched > 120000) void fetchHistory(false);
   } catch(err) {
     if(showErrors) status(err.message || 'Connection failed.',true);
     el('light').className='telemetry-light';
   }
 }
+async function fetchHistory(showErrors = true) {
+  if (!cloud.key || !cloud.active) return;
+  const range = cloud.historyRange;
+  const request = ++cloud.historyRequest;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    let response;
+    try {
+      response = await fetch(CLOUD_HISTORY_ENDPOINT+'?range='+encodeURIComponent(range), {
+        headers: { Authorization: 'Bearer '+cloud.key }, cache: 'no-store', signal: controller.signal
+      });
+    } finally { clearTimeout(timeout); }
+    if (!response.ok) throw Error('History request failed (HTTP '+response.status+')');
+    const result = await response.json();
+    if (request !== cloud.historyRequest || !cloud.active || range !== cloud.historyRange) return;
+    cloud.history=result.history||[];
+    cloud.historyTotal=Number(result.total)||0;
+    cloud.historyLoaded=range;
+    cloud.historyLastFetched=Date.now();
+    if (cloud.latest) renderLive();
+  } catch(error) {
+    if (showErrors && request === cloud.historyRequest) {
+      status('History unavailable: '+(error?.message||String(error)),true);
+    }
+  }
+}
 function showMode(isLive) {
   cloud.active=isLive;
+  if (!isLive) ++cloud.historyRequest;
   el('tab-live').classList.toggle('active',isLive);
   el('tab-demo').classList.toggle('active',!isLive);
   el('auth').hidden=!isLive;
@@ -95,7 +128,12 @@ function renderLive() {
     const body=document.createElement('span');body.textContent=value||'No status reported';
     item.append(head,body);modEl.appendChild(item);
   }
-  el('stock-caption').textContent=goods.length?'Actual market prices over the last '+cloud.history.length+' stored snapshots. Forecast mean and 5th/95th percentile are indicated at the right edge.':'Bank minigame not available yet.';
+  const rangeLabel=cloud.historyRange==='all'?'all time':cloud.historyRange.toUpperCase();
+  const shown=cloud.history.length;
+  const total=cloud.historyLoaded===cloud.historyRange?cloud.historyTotal:shown;
+  el('stock-caption').textContent=goods.length
+    ?'Actual prices · '+shown+' chart points from '+number(total,0)+' recorded snapshots ('+rangeLabel+'). Forecast mean and 5th/95th percentile appear at the right edge. The underlying history is retained without expiration.'
+    :'Bank minigame not available yet.';
   renderGraph();
 }
 function renderGraph() {
@@ -106,7 +144,7 @@ function renderGraph() {
   const selected=cloud.latest?.market?.goods?.find(g=>g.id===cloud.selected);if(!selected)return;
   const samples=cloud.history.map(row=>({
     date:new Date(row.receivedAt).getTime(),value:row.market?.goods?.find(g=>g.id===selected.id)?.price
-  })).filter(x=>Number.isFinite(x.value)).slice(-100);
+  })).filter(x=>Number.isFinite(x.value)).slice(-450);
   if(!samples.length)return;
   const values=[...samples.map(x=>x.value),selected.mean,selected.low,selected.high];
   let low=Math.min(...values),high=Math.max(...values);
@@ -142,7 +180,7 @@ export function initCloudTelemetry() {
       <div class="subhead"><strong>Live game telemetry</strong><span id="cloud-date">WAITING FOR FIRST UPLOAD</span></div>
       <div id="cloud-kpis" class="telemetry-kpis"></div>
       <div class="telemetry-cols">
-        <div class="telemetry-surface"><h4>Actual market history</h4><div id="cloud-stocks" class="telemetry-stock-picker"></div><canvas id="cloud-chart" class="telemetry-chart" role="img" aria-label="Historical stock price"></canvas><p id="cloud-stock-caption"></p></div>
+        <div class="telemetry-surface"><h4>Actual market history</h4><div id="cloud-ranges" class="telemetry-ranges"><button type="button" data-range="24h" class="active">24H</button><button type="button" data-range="7d">7D</button><button type="button" data-range="30d">30D</button><button type="button" data-range="1y">1Y</button><button type="button" data-range="all">ALL TIME</button></div><div id="cloud-stocks" class="telemetry-stock-picker"></div><canvas id="cloud-chart" class="telemetry-chart" role="img" aria-label="Historical stock price"></canvas><p id="cloud-stock-caption"></p></div>
         <div class="telemetry-surface"><h4>Current holdings &amp; forecast</h4><div style="overflow-x:auto"><table class="telemetry-stock-table"><thead><tr><th>ASSET</th><th>SPOT</th><th>MEAN</th><th>EDGE</th><th>OWN/TARGET</th></tr></thead><tbody id="cloud-rows"></tbody></table></div></div>
       </div>
       <div id="cloud-modules" class="telemetry-modules"></div>
@@ -153,18 +191,28 @@ export function initCloudTelemetry() {
       <div class="telemetry-writer"><input type="password" id="cloud-writer" autocomplete="off" placeholder="Paste your private publisher key" aria-label="Private publisher key" /><button id="cloud-copy" type="button">COPY GAME CONSOLE COMMAND</button></div>
     </details>`;
   metrics.before(element);
+  el('ranges').querySelectorAll('button[data-range]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const range=button.dataset.range;
+      if(!HISTORY_RANGES.includes(range) || range===cloud.historyRange)return;
+      cloud.historyRange=range;
+      cloud.historyLoaded='';
+      el('ranges').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b===button));
+      if(cloud.active&&cloud.key)void fetchHistory(true);
+    });
+  });
   el('reader').value=cloud.key;
   el('tab-demo').addEventListener('click',()=>showMode(false));
   el('tab-live').addEventListener('click',()=>showMode(true));
   el('connect').addEventListener('click',()=>{
     const key=el('reader').value.trim();
     if(!/^[A-Za-z0-9_-]{32,150}$/.test(key)){status('Enter a valid private viewer key.',true);return;}
-    cloud.key=key;sessionStorage.setItem('cookiequant:viewer',key);
+    cloud.key=key;cloud.historyLoaded='';cloud.historyLastFetched=0;sessionStorage.setItem('cookiequant:viewer',key);
     showMode(true);
   });
   el('reader').addEventListener('keydown',e=>{if(e.key==='Enter')el('connect').click();});
   el('disconnect').addEventListener('click',()=>{
-    cloud.key='';cloud.latest=null;cloud.history=[];sessionStorage.removeItem('cookiequant:viewer');
+    cloud.key='';cloud.latest=null;cloud.history=[];cloud.historyLoaded='';cloud.historyTotal=0;++cloud.historyRequest;sessionStorage.removeItem('cookiequant:viewer');
     el('reader').value='';el('live').classList.remove('visible');el('light').className='telemetry-light';
     status('Viewer disconnected. Historical telemetry remains private in the cloud.');
   });

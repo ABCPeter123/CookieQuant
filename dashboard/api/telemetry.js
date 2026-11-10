@@ -105,8 +105,7 @@ export default async function handler(req, res) {
       VALUES (${payload.run}, ${payload.market.tick}, ${record}::jsonb)
       ON CONFLICT (game_run, tick) DO UPDATE
       SET payload = EXCLUDED.payload, received_at = now()`;
-    // Bounded retention. No saves or personal information are stored.
-    await sql`DELETE FROM cq_telemetry_snapshots WHERE received_at < now() - interval '30 days'`;
+    // Append or update the current tick. Stored history has no time-based expiration.
     return send(res, 200, { ok: true, tick: payload.market.tick, receivedAt: new Date().toISOString() });
   } catch (error) {
     console.error('Telemetry ingest database error', error?.message);

@@ -12,12 +12,12 @@ Official Cookie Clicker browser tab
   ↳ POST https://cookiequant-dashboard.vercel.app/api/telemetry
      Authorization: Bearer <private write key>
   ↳ Vercel serverless API validates, sanitizes and stores data
-  ↳ Neon PostgreSQL, retention: 30 days
+  ↳ Neon PostgreSQL, raw snapshots retained without an application-level expiry
 
 Dashboard: private Live Game mode
   ↳ GET https://cookiequant-dashboard.vercel.app/api/live
      Authorization: Bearer <private read key>
-  ↳ Latest snapshot + up to 120 historical observations
+  ↳ Latest snapshot plus sampled 24h, 7d, 30d, 1y or all-time history
   ↳ 30-second refresh. No trade actions.
 ```
 
@@ -60,7 +60,8 @@ Browser background throttling, sleep, network failures and game updates can inte
 - Only whitelisted fields are stored. **Game saves, Game.seed, authentication cookies, IP addresses, emails and the keys themselves are not written to the telemetry table.**
 - The game communicates directly with the API over HTTPS. The browser dashboard cannot send commands, buy stock or change your game.
 - One shared read key provides access to all collected history. Anyone you give the viewer key can view the telemetry. Rotate both keys in Vercel to revoke access.
-- Old rows are automatically deleted after 30 days when new uploads occur.
+- **No automatic deletion or expiration.** Snapshot history persists across browser restarts and is kept as long as the Neon database and account remain active.
+- Storage consumption and backup policies depend on your Neon plan. Configure regular exports or backups separately if you need disaster recovery guarantees.
 
 ## Included fields
 
@@ -73,7 +74,9 @@ Browser background throttling, sleep, network failures and game updates can inte
 | Performance | Realized simulated-market-dollar P&L, trade count and the latest action |
 | Automation | Short stock, Garden, Godzamok, Ascension and Dragon status summaries |
 
-The dashboard's historical line chart shows **actual captured market quotes**. The forecast markers are the estimates produced by the gameplay automation at the latest tick. The dashboard does not invent live orders.
+The dashboard's historical line chart shows **actual captured market quotes**. You can choose **24H, 7D, 30D, 1Y, or ALL TIME**. The backend samples up to 450 chart points from the selected period, evenly by stored snapshot count. This is a chart-display limit, **not a database retention limit**. The newest tick also appears in the live summary. The forecast markers are estimates from the gameplay automation. The dashboard does not invent live orders.
+
+Snapshots are stored once per `(game_run, market tick)`. A later upload for the same tick updates its existing row. Every distinct tick remains saved without application-level expiration. The `/api/live` endpoint provides the most recent 120 snapshots for lightweight refreshes; the authenticated `/api/history?range=all` endpoint produces representative samples from the entire stored period.
 
 ## Hosting and operations
 
@@ -101,4 +104,4 @@ They must remain encrypted in Vercel project settings and must not be exposed th
 
 ## Limits
 
-The ingestion service is designed for one owner/game. It is not a multi-user platform. Rates are bounded by the game's own one-minute publisher and the database's 30-day retention, but a stolen write key could cause storage abuse until rotated. A later multi-user release should add account-based authentication, write quotas, session identity and an independent device-pairing flow.
+The ingestion service is designed for one owner/game. It is not a multi-user platform. The game publishes roughly once a minute while running, but there is now **no automatic storage cap**. Monitor Neon usage and configure backups or archival exports for long-term recovery. A stolen write key could cause storage abuse until rotated. A later multi-user release should add account-based authentication, write quotas, session identity and an independent device-pairing flow.

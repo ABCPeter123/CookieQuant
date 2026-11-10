@@ -1,0 +1,74 @@
+import { neon } from '@neondatabase/serverless';
+import { createHash, timingSafeEqual } from 'node:crypto';
+
+const DASHBOARD_ORIGIN = 'https://cookiequant-dashboard.vercel.app';
+const RANGES = Object.freeze({ '24h': 1, '7d': 7, '30d': 30, '1y': 365, all: 0 });
+const SAMPLES = 450;
+function authorized(req) {
+  const secret = process.env.TELEMETRY_READ_KEY;
+  const supplied = req.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{32,150})$/)?.[1];
+  return Boolean(secret && secret.length >= 32 && supplied &&
+    timingSafeEqual(createHash('sha256').update(secret).digest(), createHash('sha256').update(supplied).digest()));
+}
+export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  const origin = req.headers.origin;
+  if (origin && origin !== DASHBOARD_ORIGIN) return res.status(403).json({ error: 'Origin not allowed' });
+  if (origin === DASHBOARD_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', DASHBOARD_ORIGIN);
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (!authorized(req)) return res.status(401).json({ error: 'Invalid viewer key' });
+  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Storage unavailable' });
+  const range = typeof req.query?.range === 'string' ? req.query.range : '24h';
+  if (!Object.hasOwn(RANGES, range)) return res.status(400).json({ error: 'Invalid history range' });
+  const days = RANGES[range];
+  const sql = neon(process.env.DATABASE_URL);
+  try {
+    // Sample price points for display without deleting or truncating historical records.
+    const rows = await sql`
+      WITH ranked AS (
+        SELECT id, received_at, row_number() OVER (ORDER BY received_at ASC, id ASC) AS row_num,
+          count(*) OVER () AS total,
+          min(received_at) OVER () AS first_at,
+          max(received_at) OVER () AS last_at
+        FROM cq_telemetry_snapshots
+        WHERE (${days}::int = 0 OR received_at >= NOW() - (${days}::int * INTERVAL '1 day'))
+      ), picked AS (
+        SELECT DISTINCT ON (bucket) id, total, first_at, last_at
+        FROM (
+          SELECT id, received_at, total, first_at, last_at,
+            floor((row_num - 1)::numeric * ${SAMPLES} / total) AS bucket
+          FROM ranked
+        ) AS mapped
+        ORDER BY bucket, received_at DESC, id DESC
+      )
+      SELECT s.received_at, s.tick,
+        (SELECT jsonb_agg(jsonb_build_object('id', stock->'id', 'price', stock->'price'))
+         FROM jsonb_array_elements(COALESCE(s.payload->'market'->'goods', '[]'::jsonb)) AS stock) AS goods,
+        p.total, p.first_at, p.last_at
+      FROM picked p
+      JOIN cq_telemetry_snapshots s ON s.id = p.id
+      ORDER BY s.received_at ASC, s.id ASC
+      LIMIT ${SAMPLES}`;
+    const history = rows.map(row => ({
+      receivedAt: row.received_at,
+      tick: row.tick,
+      market: { goods: row.goods || [] }
+    }));
+    return res.status(200).json({
+      range, sampled: history.length,
+      total: rows.length ? Number(rows[0].total) : 0,
+      firstAt: rows[0]?.first_at ?? null,
+      lastAt: rows[0]?.last_at ?? null,
+      history
+    });
+  } catch (error) {
+    console.error('Telemetry history database error', error?.message);
+    return res.status(503).json({ error: 'Telemetry history unavailable' });
+  }
+}

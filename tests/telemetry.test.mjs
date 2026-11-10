@@ -31,8 +31,22 @@ test('publisher API validates and strips fields',async()=>{
  assert.match(api,/TELEMETRY_WRITE_KEY/);
  assert.match(api,/toRecord\(body\)/);
  assert.match(api,/MAX_BODY = 180000/);
- assert.match(api,/interval '30 days'/);
+ assert.doesNotMatch(api,/DELETE FROM cq_telemetry_snapshots/i);
+ assert.doesNotMatch(api,/interval '30 days'/);
  assert.doesNotMatch(api,/value\.seed/);
+});
+test('all-time history is authenticated and bounded only in display sampling',async()=>{
+ const api=await read('../dashboard/api/history.js');
+ assert.match(api,/TELEMETRY_READ_KEY/);
+ assert.match(api,/timingSafeEqual/);
+ assert.match(api,/all: 0/);
+ assert.match(api,/SAMPLES = 450/);
+ assert.match(api,/row_number\(\) OVER/);
+ assert.doesNotMatch(api,/DELETE FROM/);
+ const client=await read('../dashboard/js/live.js');
+ assert.match(client,/data-range="all"/);
+ assert.match(client,/fetchHistory/);
+ assert.match(client,/CLOUD_HISTORY_ENDPOINT/);
 });
 test('dashboard exposes live and demo without storing keys in source',async()=>{
  const src=await read('../dashboard/js/live.js');
