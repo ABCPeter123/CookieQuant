@@ -4,6 +4,8 @@
 
 **Automate the bakery. Model the market. Optimize the chaos.**
 
+[![Build and test](https://github.com/ABCPeter123/CookieQuant/actions/workflows/ci.yml/badge.svg)](https://github.com/ABCPeter123/CookieQuant/actions/workflows/ci.yml) [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A browser-based strategy engine for [Cookie Clicker](https://orteil.dashnet.org/cookieclicker/), combining autonomous gameplay, Monte Carlo forecasting, constrained portfolio allocation, and a configurable in-game dashboard.
 
 [Install userscript](https://raw.githubusercontent.com/ABCPeter123/CookieQuant/main/dist/cookie-quant.user.js) · [Get started](#quick-start) · [Features](#features) · [Strategy guide](docs/STRATEGIES.md) · [Architecture](docs/ARCHITECTURE.md)
@@ -127,7 +129,7 @@ npm test            # Parse and verify the code and generated builds
 npm run check       # Ensure the committed builds are current, then test
 ```
 
-See [development notes](docs/DEVELOPMENT.md) or [publish this project](docs/PUBLISHING.md).
+See [development notes](docs/DEVELOPMENT.md), [release instructions](docs/PUBLISHING.md), and [contributing](CONTRIBUTING.md).
 
 ## Compatibility and credits
 
