@@ -8,11 +8,24 @@
 
 A browser-based strategy engine for [Cookie Clicker](https://orteil.dashnet.org/cookieclicker/), combining autonomous gameplay, Monte Carlo forecasting, constrained portfolio allocation, and a configurable in-game dashboard.
 
-[Install userscript](https://raw.githubusercontent.com/ABCPeter123/CookieQuant/main/dist/cookie-quant.user.js) · [Get started](#quick-start) · [Features](#features) · [Strategy guide](docs/STRATEGIES.md) · [Architecture](docs/ARCHITECTURE.md)
+**[Explore the interactive research dashboard](https://cookiequant-dashboard.vercel.app)** · [Install userscript](https://raw.githubusercontent.com/ABCPeter123/CookieQuant/main/dist/cookie-quant.user.js) · [Get started](#quick-start) · [Features](#features) · [Strategy guide](docs/STRATEGIES.md) · [Architecture](docs/ARCHITECTURE.md)
 
 </div>
 
 ---
+
+## Interactive research dashboard
+
+**[Launch CookieQuant Research Terminal](https://cookiequant-dashboard.vercel.app)**
+
+The public dashboard demonstrates the trading algorithm in an interactive research environment:
+
+- Inspect forecast distributions generated from **256 joint Monte Carlo price simulations**.
+- Change the forecast horizon, portfolio budget, and worst-5% downside risk limit.
+- See how fee-aware buy signals feed into discrete, risk-constrained portfolio allocations.
+- Explore smaller visual demos of Garden breeding, Godzamok combo economics, and ascension planning.
+
+The demo runs entirely in the browser with **synthetic initial market states**. It uses a port of the toolkit's stochastic market model, not live Cookie Clicker data, historical returns, or a connection to your game save. See [dashboard documentation](dashboard/README.md).
 
 ## Overview
 
