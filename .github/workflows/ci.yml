@@ -18,4 +18,10 @@ jobs:
         with:
           node-version: '22'
       - name: Verify built releases and run tests
-        run: npm run check
+        run: |
+          npm run check
+          node --check dashboard/js/app.js
+          node --check dashboard/js/live.js
+          node --check dashboard/js/model.js
+          node --check dashboard/api/live.js
+          node --check dashboard/api/telemetry.js

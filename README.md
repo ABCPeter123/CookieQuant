@@ -14,6 +14,12 @@ A browser-based strategy engine for [Cookie Clicker](https://orteil.dashnet.org/
 
 ---
 
+## Private cloud telemetry
+
+CookieQuant can stream **real gameplay telemetry** to its cloud research terminal using an opt-in userscript publisher, a private Neon database, and authenticated Vercel endpoints. Live mode shows actual market quotes, the trading engine's own forecasts and portfolio targets, stock positions, trade counts, and Garden / Godzamok / Ascension statuses.
+
+The public demo remains synthetic and does not expose anyone's game data. The **LIVE GAME** tab requires a private viewer key. Enable uploads in the game console with `cookieClickToolkit.telemetry.connect("YOUR_PRIVATE_WRITE_KEY")` after updating the userscript. Credentials are issued privately and are never published in this repository. See the [cloud telemetry installation and security guide](docs/CLOUD_TELEMETRY.md).
+
 ## Interactive research dashboard
 
 **[Launch CookieQuant Research Terminal](https://cookiequant-dashboard.vercel.app)**
