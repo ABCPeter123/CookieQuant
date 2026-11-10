@@ -2757,6 +2757,26 @@
     toolkit.stockStatus=`Tick ${market.ticks}; 256 joint scenarios, ${Number(controls.stockHorizon)||15}-tick horizon. `+
       `Modeled portfolio return ${(plan.expected*100).toFixed(2)}%; worst-5% average loss ${(plan.risk*100).toFixed(2)}%. `+
       `${(20*Math.pow(0.95,market.brokers)).toFixed(2)}% buy fee; sales 0%. Predictive allocation active.`;
+    toolkit.telemetryStock = {
+      tick: Number(market.ticks),
+      horizon: Number(controls.stockHorizon) || 15,
+      modeledReturn: plan.expected,
+      modeledRisk: plan.risk,
+      goods: signals.map(r => {
+        const position = book.positions[r.good.id];
+        return {
+          id: r.good.id, symbol: r.good.symbol || "", name: r.good.name || "",
+          price: r.price, stock: Number(r.good.stock), max: Number(market.getGoodMaxStock(r.good)),
+          mode: Number(r.good.mode), trend: Number(r.good.d),
+          mean: r.mean, low: r.low,
+          high: Math.max(...r.paths), win: r.win, buy: r.buy,
+          target: plan.targets[r.good.id] || 0,
+          basis: position && !position.unknown && position.quantity > 0 ? position.dollarCost / position.quantity : 0,
+          unknown: !!position?.unknown,
+          paths: r.paths.map(value => Math.round(value * 1000) / 1000)
+        };
+      })
+    };
     saveControls();
   }
   toolkit.stockTimer = setInterval(() => {
@@ -6201,6 +6221,7 @@
     clearInterval(toolkit.sugarLumpTimer);
     clearInterval(toolkit.gardenTimer);
     clearInterval(toolkit.stockTimer);
+    clearInterval(toolkit.telemetryTimer);
     clearInterval(toolkit.forceHandTimer);
     clearInterval(toolkit.godzamokTimer);
     clearInterval(toolkit.pantheonTimer);
@@ -6234,6 +6255,118 @@
 
   window.cookieClickToolkit = toolkit;
   window.clickIncomeMeter = toolkit;
+
+  /* Cloud telemetry is opt-in and does not alter gameplay decisions. */
+  const CQ_TELEMETRY_KEY = "cookiequant:telemetry:v1";
+  const CQ_TELEMETRY_URL = "https://cookiequant-dashboard.vercel.app/api/telemetry";
+  const cloudConfig = () => {
+    try { return JSON.parse(localStorage.getItem(CQ_TELEMETRY_KEY) || "null"); }
+    catch { return null; }
+  };
+  const finiteTelemetry = value => Number.isFinite(Number(value)) ? Number(value) : 0;
+  const cloudRun = () => {
+    const saved = cloudConfig();
+    if (saved?.run && /^[a-zA-Z0-9_-]{8,90}$/.test(saved.run)) return saved.run;
+    return window.crypto?.randomUUID?.() || ("cq" + Date.now() + Math.random().toString(36).slice(2));
+  };
+  toolkit.telemetry = {
+    status: "Disabled. Call cookieClickToolkit.telemetry.connect('YOUR_WRITE_KEY') to opt in.",
+    connect(writeKey) {
+      if (typeof writeKey !== "string" || !/^[A-Za-z0-9_-]{32,150}$/.test(writeKey)) {
+        throw Error("Expected a valid private telemetry write key.");
+      }
+      const settings = { key: writeKey, run: cloudRun(), enabled: true };
+      localStorage.setItem(CQ_TELEMETRY_KEY, JSON.stringify(settings));
+      this.status = "Connecting";
+      void this.push();
+      return "Cloud telemetry enabled. Use cookieClickToolkit.telemetry.status for health.";
+    },
+    disconnect() {
+      localStorage.removeItem(CQ_TELEMETRY_KEY);
+      this.status = "Disabled";
+      return "Cloud telemetry disconnected. Stored cloud history remains until its 30-day expiry.";
+    },
+    async push() {
+      if (!toolkit.active || !window.Game?.ready) return false;
+      const settings = cloudConfig();
+      if (!settings?.enabled || !settings.key) return false;
+      if (this.pending) return false;
+      const market = getStockMarket();
+      const book = market ? stockBookFor(market) : null;
+      const tick = market ? Number(market.ticks) : Math.floor(Date.now() / 60000);
+      const existing = toolkit.telemetryStock;
+      const planned = existing?.tick === tick ? existing : null;
+      const goods = (market?.goodsById || []).map(good => {
+        const row = planned?.goods?.find(g => g.id === good.id);
+        const position = book?.positions?.[good.id];
+        return {
+          id: Number(good.id), symbol: String(good.symbol || ""),
+          name: String(good.name || ""), price: market.getGoodPrice(good),
+          stock: Number(good.stock), max: market.getGoodMaxStock(good),
+          mode: Number(good.mode), trend: Number(good.d),
+          mean: row?.mean ?? Number(market.getGoodPrice(good)),
+          low: row?.low ?? Number(market.getGoodPrice(good)),
+          high: row?.high ?? Number(market.getGoodPrice(good)),
+          win: row?.win ?? 0, buy: row?.buy === true,
+          target: row?.target ?? Number(good.stock),
+          basis: position && !position.unknown && position.quantity > 0
+            ? position.dollarCost / position.quantity : 0,
+          unknown: !!position?.unknown, paths: row?.paths || []
+        };
+      });
+      const snapshot = {
+        version: 1, run: settings.run, emittedAt: new Date().toISOString(),
+        game: {
+          version: String(Game.version || ""), resets: Number(Game.resets) || 0,
+          cookies: finiteTelemetry(Game.cookies), cps: finiteTelemetry(Game.cookiesPs),
+          prestige: finiteTelemetry(Game.prestige)
+        },
+        market: {
+          tick: Number.isSafeInteger(tick) ? tick : 0,
+          level: Number(Game.Objects?.Bank?.level) || 0,
+          brokers: Number(market?.brokers) || 0,
+          fee: market ? 0.2 * Math.pow(0.95, Math.max(Number(market.brokers) || 0, 0)) : 0,
+          riskLimit: (Number(controls.stockRiskPercent) || 5) / 100,
+          budgetPercent: Number(controls.stockBudgetPercent) || 0,
+          horizon: Number(controls.stockHorizon) || 15,
+          modeledReturn: planned?.modeledReturn || 0,
+          modeledRisk: planned?.modeledRisk || 0,
+          autoTrading: controls.stockAuto === true,
+          goods
+        },
+        stats: {
+          trades: book?.trades || 0, realizedDollars: book?.realizedDollars || 0,
+          feesDollars: book?.feesDollars || 0, nativeProfit: book?.nativeProfit || 0,
+          lastAction: book?.lastAction || ""
+        },
+        modules: {
+          stock: toolkit.stockStatus || "", garden: toolkit.gardenStatus || "",
+          godzamok: toolkit.godzamokStatus || "",
+          ascension: toolkit.ascensionStatus || "", dragon: toolkit.dragonStatus || ""
+        }
+      };
+      this.pending = true;
+      this.status = "Sending snapshot for tick " + tick;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        const response = await fetch(CQ_TELEMETRY_URL, {
+          method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + settings.key },
+          body: JSON.stringify(snapshot), mode: "cors", cache: "no-store", signal: controller.signal
+        });
+        if (!response.ok) throw Error("HTTP " + response.status);
+        this.lastSent = Date.now();
+        this.status = "Connected. Last upload " + new Date(this.lastSent).toLocaleTimeString() + " (tick " + tick + ")";
+        return true;
+      } catch(error) {
+        this.status = "Upload failed: " + (error?.message || String(error));
+        console.warn("[CookieQuant] Cloud telemetry: " + this.status);
+        return false;
+      } finally { clearTimeout(timeout); this.pending = false; }
+    }
+  };
+  toolkit.telemetryTimer = setInterval(() => { if (toolkit.active) void toolkit.telemetry.push(); }, 60000);
+  if (cloudConfig()?.enabled) setTimeout(() => { if (toolkit.active) void toolkit.telemetry.push(); }, 6000);
 
   saveControls();
   console.log(`Cookie Toolkit ${TOOLKIT_VERSION} loaded. Garden synchronization, smart soil and measured Godzamok profit are installed.`);
