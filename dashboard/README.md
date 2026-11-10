@@ -1,40 +1,36 @@
 # CookieQuant Research Terminal
 
-A static interactive research dashboard that explains the CookieQuant strategy engine. It intentionally does **not** connect to a live Cookie Clicker save or execute in-game actions.
+A static interactive research dashboard explaining the CookieQuant strategy engine. It does **not** connect to a live Cookie Clicker save or execute game actions.
 
 ## Market Lab
 
-- Stochastic 256-path price simulation, up to 20 market ticks
-- Common market shocks across assets
-- 5th/50th/95th percentile forecasts with sample trajectory visualization
-- Fee-aware trading signals
-- Greedy discrete portfolio allocation with expected log-growth objective and worst-5% expected-shortfall limit
-- Controllable forecast horizon, tail-loss budget, and capital allocation
-- Reproducible reruns with an explicit pseudorandom seed
+- 256 joint stochastic simulation paths, with shared market shocks, over 10–20 future ticks
+- 5th/50th/95th percentile forecasts, sample trajectories, and a replayable random seed
+- Fee-aware buying signals
+- Greedy discrete portfolio allocation with expected log-growth objective and worst-5% expected-shortfall constraint
+- Controls for forecast horizon, tail-risk limit, and capital allocation
 
-The stochastic transition code is adapted from `stockSimulateTick` in `src/cookie-quant.js`. The dashboard starts from **illustrative synthetic market states** and models zero existing positions. The full browser controller also includes game-state integration, reserve checks, transaction verification, and persisted cost basis.
+The stochastic transition code is adapted from `stockSimulateTick` in `src/cookie-quant.js`. The demo uses **synthetic asset states** and assumes zero starting positions. The browser controller includes additional guards, reserve calculations, live game state, and position ledgers.
 
-## Additional modules
-
-The Garden, Godzamok, and ascension cards illustrate the structure of the actual algorithms. Their diagrams and example numbers are not live game-state snapshots or measured performance.
+The Garden, Godzamok, and ascension modules explain the other algorithms with illustrative data, not measured performance.
 
 ## Local development
 
-Open `index.html` through a static HTTP server, for example:
-
 ```sh
 cd dashboard
+npm run build
+cd public
 python3 -m http.server 8000
 ```
 
-Then browse `http://localhost:8000`. ES modules generally require an HTTP origin.
+Open `http://localhost:8000`. Serve the generated `public` folder so browser ES module imports work.
 
-From the repository root, run `npm test` to verify both the toolkit and dashboard models.
+Run `npm test` at the repository root for source and model checks.
 
 ## Deployment
 
-This folder is the root directory of the `cookiequant-dashboard` Vercel project. It requires no environment variables, backend functions, or API keys. Pushes to the production branch deploy the latest static dashboard.
+Vercel project: `cookiequant-dashboard`, rooted at `dashboard`. Vercel runs `npm run build` and serves `public`. Changes to `main` deploy the latest static site automatically. No backend, environment variables, or third-party frontend packages are required.
 
-## License and attribution
+## License
 
-The original dashboard and CookieQuant implementation are MIT-licensed. Cookie Clicker and Cookie Monster are separate third-party projects with their own authors and terms.
+The original project code is MIT-licensed. Cookie Clicker and Cookie Monster remain distinct third-party projects.

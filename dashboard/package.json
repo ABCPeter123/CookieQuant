@@ -3,10 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Static educational dashboard for CookieQuant simulation and optimization algorithms",
+  "description": "Static research dashboard for CookieQuant algorithms",
   "scripts": {
-    "test": "node --test ../tests/dashboard.test.mjs",
-    "build": "node -e \"console.log('Static dashboard: no build step required')\""
+    "build": "node scripts/build.mjs",
+    "test": "node --test ../tests/dashboard.test.mjs"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }
