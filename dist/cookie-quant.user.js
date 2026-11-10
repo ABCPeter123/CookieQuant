@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.10.28.1
+// @version      2026.11.10.2
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -25,7 +25,7 @@
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.10.28.1";
+        const TOOLKIT_VERSION = "2026.11.10.2";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.

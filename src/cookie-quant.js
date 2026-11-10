@@ -1,5 +1,5 @@
 (() => {
-  const TOOLKIT_VERSION = "2026.10.28.1";
+  const TOOLKIT_VERSION = "2026.11.10.2";
   /*
    * COOKIE CLICKER TOOLKIT
    * Paste this entire file into the browser console.

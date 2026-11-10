@@ -1,3 +1,4 @@
+import { initCloudTelemetry } from './live.js';
 import { GOODS, REGIMES, DEFAULT_CONFIG, runResearch, godzamokEstimate, gardenWindow } from './model.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -307,3 +308,4 @@ function init() {
   ['top','market','method','systems'].forEach(id => { const node = document.getElementById(id); if (node) sectionObserver.observe(node); });
 }
 init();
+initCloudTelemetry();
