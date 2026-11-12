@@ -137,7 +137,7 @@ The ingestion service is designed for one owner/game. It is not a multi-user pla
 
 ## Cloudflare R2 storage migration (No Neon at runtime)
 
-Neon's live telemetry database is a temporary source. R2 is designed for lower-cost long-lived storage. This deployment includes a **feature-flagged R2 adapter**, but Neon remains the active backend until you create and connect the Cloudflare bucket and copy history. Do not delete the Neon database before verification.
+Neon's live telemetry database is a temporary source. R2 is designed for lower-cost long-lived storage. The adapter stores every market observation in compact hourly blocks, while full 256-path simulation arrays are sampled approximately hourly. This deployment includes a **feature-flagged R2 adapter**, but Neon remains the active backend until you create and connect the Cloudflare bucket and copy history. Do not delete the Neon database before verification.
 
 ### Cloudflare setup
 
@@ -145,17 +145,22 @@ Neon's live telemetry database is a temporary source. R2 is designed for lower-c
 2. Under **R2 → Overview → Manage API Tokens**, create a bucket-scoped **Object Read & Write** token. Record the Cloudflare account ID, Access Key ID, and Secret Access Key in your password manager.
 3. In the **Vercel cookiequant-dashboard** project, configure the following as encrypted **Production** environment variables: `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. Don't paste them in GitHub, browser console, or ChatGPT. The current `DATABASE_URL` remains present during migration.
 4. Keep `TELEMETRY_BACKEND=neon` (or unset) until the migration finishes. The app continues using Neon, so your live feed does not break during setup.
-5. From the repository root, use `npm install --prefix dashboard`, then `npm run migrate:r2 --prefix dashboard` in a terminal with the same R2 variables and `DATABASE_URL` available **locally** as environment variables. Do not commit local .env files. The script copies existing rows in batches of 50 and reports progress. Rerun it to catch any final writes. The deterministic snapshot keys make retries safe. Verify stored objects via Cloudflare's R2 bucket browser.
+5. From the repository root, use `npm install --prefix dashboard`, then `npm run migrate:r2 --prefix dashboard` in a terminal with the same R2 variables and `DATABASE_URL` available **locally** as environment variables. Do not commit local .env files. The script copies existing rows in batches of 50 and reports progress. All original Neon rows retain their full historical simulation paths during migration (the reduced-frequency rule applies only to future uploads). Rerun it to catch any final writes. The deterministic snapshot keys make retries safe. Verify stored objects via Cloudflare's R2 bucket browser.
 6. Set `TELEMETRY_BACKEND=r2` in Vercel's **Production** environment and redeploy. Then check `/api/live`, `/api/history?range=all`, and `/api/health` return the expected snapshots. Confirm the next browser upload succeeds. Only after these checks should you consider removing `DATABASE_URL` or deleting the old Neon project.
 
 ### R2 data layout
 
-- `cookiequant/v1/snapshots/YYYY-MM-DD/<run>-<tick>.json.gz`: compressed full raw snapshot per game run/tick/day. These preserve the Monte Carlo vectors for later backtesting.
-- `cookiequant/v1/daily/YYYY-MM-DD.json.gz`: compressed market price index for charting. Atomically updated with an ETag check to protect against overlapping writes.
-- `cookiequant/v1/latest.json.gz`: most recent snapshot, a 120-row recent history cache, the first date and an approximate record count.
+- `cookiequant/v1/hourly/YYYY-MM-DD/HH.json.gz`: lossless compact observation index. It preserves every market quote, position, trade statistic, per-asset forecast summary, and automation status, excluding only the 256 random scenario outcomes. Hourly blocks bound write size.
+- `cookiequant/v1/daily/YYYY-MM-DD.json.gz`: one latest observation and observation count per hour, for efficient 7D/30D/1Y/all-time charts. The minute-resolution hourly index remains intact and can be queried directly.
+- `cookiequant/v1/snapshots/YYYY-MM-DD/<run>-<tick>.json.gz`: gzip-compressed full simulations from approximately hourly samples, plus **every** historical full Neon snapshot imported through the migration script.
+- `cookiequant/v1/latest.json.gz`: most recent full snapshot with all 256 Monte Carlo scenario values, a compact 120-row recent history cache, and timeline metadata. This is overwritten on each upload; archived observations remain separately in hourly blocks.
+
+R2 uses HTTP conditional ETag writes for its shared indexes to reduce races. Full history is not automatically deleted. In long chart ranges, the API samples hourly rollups and a bounded selection of days. That reduces read operations without deleting minute-level history.
 
 The Vercel API still validates the publishing key. R2 credentials stay server-side, not in the public frontend or the userscript. Charts remain public and read-only. The R2 adapter can sample a long historical period without downloading every archived Monte Carlo vector. Historical day indexes are sampled across longer timespans to keep requests bounded. No automatic data deletion is configured.
 
 ### Estimated usage
 
-The original Neon payload averaged about **30 KB per snapshot**, roughly 16 GB per year at a steady one-minute cadence before compression. R2 stores these compressed, plus small daily summary files. Cloudflare's current free tier includes 10 GB-month of Standard storage and 1 million Class A operations monthly. Storage beyond the free tier is billed, so indefinite retention is not equivalent to unlimited free storage. Keep independent backups if the history is valuable.
+Measurements from actual Neon snapshots (November 12, 2026): approximately **44.8 KB per snapshot as JSON**, of which all but **6.7 KB** can be removed from minute-by-minute records by omitting raw Monte Carlo trajectories. That is about **85% less uncompressed data per market observation**. Instead, periodic full-scenario archives preserve the stochastic model for research and the newest live snapshot always includes all scenarios.
+
+At one minute per observation, there are roughly 43,200 observations in a 30-day month. This implementation creates about **two compact index updates per minute plus one latest-snapshot update**, and approximately 1–2 full-scenario archive objects per hour. That is roughly **130,000–135,000 Class A operations in 30 days**, excluding retries, migrations and other operations, well below the current one-million-operation free monthly allowance. R2 Standard also provides 10 million free Class B read-type operations monthly, with no egress fee. **10 GB-month is an average recurring storage allowance, not an extra 10 GB added every month.** Compressed object sizes vary; measure actual R2 usage after cutover. The free tier cannot guarantee indefinite free storage. Keep independent backups if the history is valuable.

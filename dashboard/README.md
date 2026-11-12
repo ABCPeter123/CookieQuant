@@ -51,4 +51,4 @@ The monitor classifies data as active (last upload within 150 seconds), delayed 
 
 ## Object storage backend
 
-The dashboard supports `TELEMETRY_BACKEND=r2` backed by a private Cloudflare R2 bucket. The Vercel function adapter writes compressed immutable snapshots and rolling daily price indexes, preserving the same public API interface. Until bucket credentials and migration are configured, the default storage backend remains Neon. Instructions: [Cloud telemetry and R2 migration](../docs/CLOUD_TELEMETRY.md#cloudflare-r2-storage-migration-no-neon-at-runtime).
+The dashboard supports `TELEMETRY_BACKEND=r2` backed by a private Cloudflare R2 bucket. The Vercel function adapter writes compressed minute-resolution hourly indexes, small daily rollups, and periodic full Monte Carlo scenario archives. Every imported Neon snapshot retains its original complete scenarios. The latest simulation remains complete. Public API paths remain unchanged. Until bucket credentials and migration are configured, the default storage backend remains Neon. Instructions: [Cloud telemetry and R2 migration](../docs/CLOUD_TELEMETRY.md#cloudflare-r2-storage-migration-no-neon-at-runtime).

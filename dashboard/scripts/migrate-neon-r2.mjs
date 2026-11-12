@@ -13,6 +13,10 @@ let lastId=Number(process.env.MIGRATE_AFTER_ID||0);
 if(!Number.isSafeInteger(lastId)||lastId<0)throw Error('Invalid MIGRATE_AFTER_ID');
 let migrated=0,errors=0,first=null,last=null;
 const limit=50;
+const delayMs=Number(process.env.R2_MIGRATION_DELAY_MS??1100);
+if(!Number.isFinite(delayMs)||delayMs<0||delayMs>30000)
+  throw Error('Invalid R2_MIGRATION_DELAY_MS');
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 while(true){
   const rows=await db`SELECT id,received_at,payload FROM cq_telemetry_snapshots
     WHERE id>${lastId} ORDER BY id ASC LIMIT ${limit}`;
@@ -20,11 +24,12 @@ while(true){
   for(const row of rows){
     const at=new Date(row.received_at).toISOString();
     try{
-      await archiveSnapshot(row.payload,at);
+      await archiveSnapshot(row.payload,at,{preserveFull:true});
       migrated++;
       first=first||at;last=at;
       lastId=Number(row.id);
       if(migrated%50===0)console.log('Copied',migrated,'snapshots; last ID',lastId);
+      if(delayMs>0)await sleep(delayMs);
     }catch(error){
       errors++;
       console.error('Migration halted at ID',row.id,'after',migrated,'records:',error?.message);

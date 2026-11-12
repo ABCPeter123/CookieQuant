@@ -1,5 +1,6 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { gzipSync, gunzipSync } from 'node:zlib';
+import { compactSnapshot, shouldArchiveScenarios } from './archive-policy.js';
 
 const PREFIX = 'cookiequant/v1';
 const DAY_MS = 86_400_000;
@@ -58,31 +59,41 @@ async function editJson(path,merge) {
   }
   throw Error('R2 concurrent write retry limit exceeded');
 }
-function compactRow(payload,receivedAt) {
-  return {
-    receivedAt, run:payload.run,tick:payload.market.tick,
-    game:payload.game,stats:payload.stats,
-    market:{
-      tick:payload.market.tick,modeledReturn:payload.market.modeledReturn,
-      modeledRisk:payload.market.modeledRisk,
-      goods:payload.market.goods.map(({id,symbol,price,stock,target,mean})=>({id,symbol,price,stock,target,mean}))
-    }
-  };
-}
-export async function archiveSnapshot(payload,receivedAt=new Date().toISOString()) {
+export async function archiveSnapshot(payload,receivedAt=new Date().toISOString(),options={}) {
   const timestamp=new Date(receivedAt);
   if(!Number.isFinite(timestamp.getTime()))throw Error('Invalid snapshot timestamp');
   const at=timestamp.toISOString();
   const day=at.slice(0,10);
-  // Stable key makes retries and migration resumable without duplicate objects.
-  const run=String(payload.run||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,90);
-  const immutable='snapshots/'+day+'/'+run+'-'+String(payload.market.tick)+'.json.gz';
-  await writeJson(immutable,{receivedAt:at,payload});
-  const row=compactRow(payload,at);
-  const daily=await editJson('daily/'+day+'.json.gz',current=>{
+  // Every market observation goes into the daily index. Full 256-path
+  // simulations only go to the cold archive on approximately hourly samples.
+  // Backfill preserves all historical simulation paths when requested.
+  const preserveScenarios=shouldArchiveScenarios(at,payload.market.tick,options);
+  if(preserveScenarios){
+    const run=String(payload.run||'').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,90);
+    const archived='snapshots/'+day+'/'+run+'-'+String(payload.market.tick)+'.json.gz';
+    await writeJson(archived,{receivedAt:at,payload});
+  }
+  const row=compactSnapshot(payload,at);
+  const hour=at.slice(11,13);
+  // Full-resolution history lives in 60-row hourly objects, not a single
+  // growing day file that would have to be rewritten in full every minute.
+  const hourly=await editJson('hourly/'+day+'/'+hour+'.json.gz',current=>{
     const rows=current?.rows?.slice()||[];
     const match=rows.findIndex(v=>v.run===row.run&&v.tick===row.tick);
     if(match>=0)rows[match]=row;else rows.push(row);
+    rows.sort((a,b)=>Date.parse(a.receivedAt)-Date.parse(b.receivedAt));
+    return {date:day,hour,rows};
+  });
+  // One representative observation per hour for efficient 30-day, yearly
+  // and all-time charts. Full hourly observations remain available in R2.
+  await editJson('daily/'+day+'.json.gz',current=>{
+    const rows=current?.rows?.slice()||[];
+    const summary={...row,samplesInHour:hourly.rows.length};
+    const match=rows.findIndex(v=>v.receivedAt.slice(11,13)===hour);
+    if(match>=0){
+      if(Date.parse(row.receivedAt)>=Date.parse(rows[match].receivedAt))rows[match]=summary;
+      else rows[match]={...rows[match],samplesInHour:hourly.rows.length};
+    }else rows.push(summary);
     rows.sort((a,b)=>Date.parse(a.receivedAt)-Date.parse(b.receivedAt));
     return {date:day,rows};
   });
@@ -102,25 +113,43 @@ export async function archiveSnapshot(payload,receivedAt=new Date().toISOString(
       total:Math.max(current?.total||0,0)+(position<0 && (!older || history.length<120)?1:0)
     };
   });
-  return {receivedAt:at,recordedDaily:daily.rows.length};
+  return {receivedAt:at,recordedHourly:hourly.rows.length,archivedScenarios:preserveScenarios};
 }
 export async function latestSnapshot() {return (await readJson('latest.json.gz'))?.value||null;}
-export async function readDay(date) {return (await readJson('daily/'+date+'.json.gz'))?.value?.rows||[];}
+export async function readDay(date) {
+  return (await readJson('daily/'+date+'.json.gz'))?.value?.rows||[];
+}
+export async function readHour(date,hour) {
+  return (await readJson('hourly/'+date+'/'+hour+'.json.gz'))?.value?.rows||[];
+}
 function dayNumber(date){return Math.floor(Date.parse(date.slice(0,10)+'T00:00:00Z')/DAY_MS);}
 function isoDay(num){return new Date(num*DAY_MS).toISOString().slice(0,10);}
 export async function readDays(first,last,maxDays=500) {
   const from=dayNumber(first),to=dayNumber(last);
   if(!Number.isFinite(from)||!Number.isFinite(to)||to<from)return [];
   const count=to-from+1;
+  // Exact minute-by-minute detail is used for short windows (up to 3 days).
+  // Long ranges use one hourly summary per day-hour, which is sufficient
+  // for a 450-point chart and avoids massive GET fanout.
+  const detailed=count<=3;
   let days;
   if(count<=maxDays)days=Array.from({length:count},(_,i)=>from+i);
-  else {
-    days=[...new Set(Array.from({length:maxDays},(_,i)=>from+Math.floor((to-from)*i/(maxDays-1))))];
+  else days=[...new Set(Array.from({length:maxDays},(_,i)=>
+    from+Math.floor((to-from)*i/(maxDays-1))))];
+  const calls=[];
+  for(const day of days){
+    const date=isoDay(day);
+    if(detailed){
+      for(let hour=0;hour<24;hour++){
+        const hh=String(hour).padStart(2,'0');
+        calls.push(()=>readHour(date,hh));
+      }
+    }else calls.push(()=>readDay(date));
   }
   const collected=[];
-  for(let start=0;start<days.length;start+=20){
-    const batches=await Promise.all(days.slice(start,start+20).map(async day=>readDay(isoDay(day))));
-    batches.forEach(rows=>collected.push(...rows));
+  for(let start=0;start<calls.length;start+=20){
+    const batches=await Promise.all(calls.slice(start,start+20).map(call=>call()));
+    for(const rows of batches)collected.push(...rows);
   }
   return collected.sort((a,b)=>Date.parse(a.receivedAt)-Date.parse(b.receivedAt));
 }

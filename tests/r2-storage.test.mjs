@@ -12,6 +12,9 @@ test('R2 adapter compresses immutable game snapshots and maintains atomic indice
   assert.match(r2,/IfNoneMatch:'\*'/);
   assert.match(r2,/snapshots\/'/);
   assert.match(r2,/daily\/'/);
+  assert.match(r2,/hourly\/'/);
+  assert.match(r2,/shouldArchiveScenarios/);
+  assert.match(r2,/compactSnapshot/);
   assert.match(r2,/latest\.json\.gz/);
   assert.match(r2,/function downsample|export function downsample/);
   assert.match(r2,/function rangeStart|export function rangeStart/);
@@ -37,6 +40,7 @@ test('migration is explicit, resumable and never deletes source rows',async()=>{
   const script=await read('../dashboard/scripts/migrate-neon-r2.mjs');
   assert.match(script,/MIGRATE_AFTER_ID/);
   assert.match(script,/archiveSnapshot/);
+  assert.match(script,/preserveFull:true/);
   assert.match(script,/ORDER BY id ASC/);
   assert.doesNotMatch(script,/\bDELETE FROM\b|\bDROP TABLE\b/);
   const docs=await read('../docs/CLOUD_TELEMETRY.md');

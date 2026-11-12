@@ -1,6 +1,6 @@
 import { neon } from '@neondatabase/serverless';
 import { buildHealthView } from '../lib/health-core.js';
-import { latestSnapshot, readDays } from '../lib/r2-storage.js';
+import { latestSnapshot, readDay, readHour } from '../lib/r2-storage.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control','public, s-maxage=15, stale-while-revalidate=30');
@@ -16,18 +16,38 @@ export default async function handler(req, res) {
       if(!state) return res.status(200).json(buildHealthView({now:new Date()}));
       const now=new Date();
       const cutoff24=now.getTime()-86_400_000;
-      const min24=new Date(cutoff24).toISOString();
-      const rows=await readDays(min24,now.toISOString(),3);
-      const lastDay=rows.filter(row=>Date.parse(row.receivedAt)>=cutoff24);
+      const cutoff60=now.getTime()-3_600_000;
+      const cutoffDate=new Date(cutoff24).toISOString();
+      const nowDate=now.toISOString();
+      const dailyKeys=[...new Set([cutoffDate.slice(0,10),nowDate.slice(0,10)])];
+      const lastTwoDays=await Promise.all(dailyKeys.map(readDay));
+      const rollups=lastTwoDays.flat();
+      const boundaryHour=cutoffDate.slice(0,13);
+      let dailyCount=0;
+      let boundaryRequired=false;
+      for(const row of rollups){
+        const stamp=row.receivedAt.slice(0,13);
+        if(stamp>boundaryHour)dailyCount+=Number(row.samplesInHour)||1;
+        else if(stamp===boundaryHour)boundaryRequired=true;
+      }
+      if(boundaryRequired){
+        const rows=await readHour(cutoffDate.slice(0,10),cutoffDate.slice(11,13));
+        dailyCount+=rows.filter(row=>Date.parse(row.receivedAt)>=cutoff24).length;
+      }
+      // Two short hourly blocks give exact minute-level ingest activity without
+      // downloading or parsing 24 hours of history every dashboard refresh.
+      const hourKeys=[...new Set([new Date(cutoff60).toISOString().slice(0,13),nowDate.slice(0,13)])];
+      const recent=(await Promise.all(hourKeys.map(key=>readHour(key.slice(0,10),key.slice(11,13))))).flat();
       const buckets=new Map();
-      for(const row of lastDay){
+      for(const row of recent){
+        if(Date.parse(row.receivedAt)<cutoff60)continue;
         const minute=row.receivedAt.slice(0,16)+':00.000Z';
         buckets.set(minute,(buckets.get(minute)||0)+1);
       }
       return res.status(200).json(buildHealthView({
         now,latestAt:state.receivedAt,
         minuteRows:Array.from(buckets,([minute,samples])=>({minute,samples})),
-        snapshots24h:lastDay.length,
+        snapshots24h:dailyCount,
         delivery:state.payload.delivery||null
       }));
     }
