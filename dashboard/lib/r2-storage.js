@@ -8,16 +8,22 @@ const PREFIX = 'cookiequant/v1';
 const DAY_MS = 86_400_000;
 let cachedClient;
 
+// Existing Vercel production secret was saved under R2_SECRET_ACCESS_KEY_ID.
+// Accept it as a compatibility alias without copying or exposing the secret.
+export function r2SecretAccessKey() {
+  return process.env.R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY_ID || '';
+}
 export function configured() {
-  return ['R2_ACCOUNT_ID','R2_BUCKET','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY']
-    .every(key => typeof process.env[key] === 'string' && process.env[key].length > 0);
+  return ['R2_ACCOUNT_ID','R2_BUCKET','R2_ACCESS_KEY_ID']
+    .every(key => typeof process.env[key] === 'string' && process.env[key].length > 0)
+    && r2SecretAccessKey().length > 0;
 }
 function client() {
   if (!configured()) throw Error('R2 storage not configured');
   if (!cachedClient) cachedClient = new S3Client({
     region:'auto',
     endpoint:'https://' + process.env.R2_ACCOUNT_ID + '.r2.cloudflarestorage.com',
-    credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},
+    credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:r2SecretAccessKey()},
     forcePathStyle:true,
     // R2 supports a subset of S3 checksum features. Suppress optional SDK checksum headers.
     requestChecksumCalculation:'WHEN_REQUIRED',

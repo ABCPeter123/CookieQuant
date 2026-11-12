@@ -185,6 +185,8 @@ Measurements from actual Neon snapshots (November 12, 2026): approximately **44.
 
 At one minute per observation, there are roughly 43,200 observations in a 30-day month. This implementation creates about **two compact index updates per minute plus one latest-snapshot update**, and approximately 1–2 full-scenario archive objects per hour. That is roughly **130,000–135,000 Class A operations in 30 days**, excluding retries, migrations and other operations, well below the current one-million-operation free monthly allowance. R2 Standard also provides 10 million free Class B read-type operations monthly, with no egress fee. **10 GB-month is an average recurring storage allowance, not an extra 10 GB added every month.** Compressed object sizes vary; measure actual R2 usage after cutover. The free tier cannot guarantee indefinite free storage. Keep independent backups if the history is valuable.
 
+The existing Vercel production R2 secret was saved as `R2_SECRET_ACCESS_KEY_ID`. The storage adapter accepts that production-only compatibility alias while preferring `R2_SECRET_ACCESS_KEY`. The original secret value remains unreadable and is not stored in GitHub.
+
 ### Migration progress (November 12, 2026)
 
 - R2 endpoint and scoped credentials verified. Bucket was empty before initialization.

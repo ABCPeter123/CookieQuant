@@ -6,6 +6,8 @@ const read = path => readFile(new URL(path,import.meta.url),'utf8');
 test('R2 adapter compresses immutable game snapshots and maintains atomic indices',async()=>{
   const r2=await read('../dashboard/lib/r2-storage.js');
   assert.match(r2,/S3Client/);
+  assert.match(r2,/R2_SECRET_ACCESS_KEY_ID/);
+  assert.match(r2,/r2SecretAccessKey\(\)/);
   assert.match(r2,/gzipSync/);
   assert.match(r2,/gunzipSync/);
   assert.match(r2,/IfMatch:etag/);
