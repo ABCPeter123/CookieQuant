@@ -10,7 +10,7 @@ test('R2 diagnostic explains authentication errors without exposing raw messages
   assert.match(explanation,/Access Key ID/);
   assert.doesNotMatch(explanation,/DO-NOT-LEAK/);
   assert.match(explainR2Failure(failure('AccessDenied',403)),/Object Read & Write/);
-  assert.match(explainR2Failure(failure('SignatureDoesNotMatch',403)),/Secret/);
+  assert.match(explainR2Failure(failure('SignatureDoesNotMatch',403)),/R2_SECRET_ACCESS_KEY/);
   assert.match(explainR2Failure(failure('NoSuchKey',404)),/missing/);
   assert.match(explainR2Failure(failure('SlowDown',429)),/rate-limited/);
   assert.match(explainR2Failure(new SyntaxError('internal parse error')),/not valid JSON/);
