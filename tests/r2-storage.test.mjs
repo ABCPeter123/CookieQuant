@@ -11,6 +11,9 @@ test('R2 adapter compresses immutable game snapshots and maintains atomic indice
   assert.match(r2,/IfMatch:etag/);
   assert.match(r2,/reserveR2Budget/);
   assert.match(r2,/R2_COST_GUARD/);
+  assert.match(r2,/budgetGuardQueue/);
+  assert.match(r2,/previousBudgetWriteAt/);
+  assert.match(r2,/elapsed<1100/);
   assert.match(r2,/IfNoneMatch:'\*'/);
   assert.match(r2,/snapshots\/'/);
   assert.match(r2,/daily\/'/);

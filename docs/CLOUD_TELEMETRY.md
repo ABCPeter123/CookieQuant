@@ -141,7 +141,7 @@ Cloudflare does **not** supply a zero-dollar spend cutoff for R2. Budget alerts 
 
 **The adapter is fail-closed until explicitly initialized:** An R2 deployment with missing `R2_COST_GUARD=enforced`, missing budget ledger, invalid budget ledger, or exhausted allowances returns HTTP 507 and does not issue data reads or writes. Inactive deployments use Neon as before.
 
-The guard records conservative reservations for each API request and object write in a single, conditionally updated R2 ledger. A rolling 31-day window covers billing periods that cross calendar months. The maximum reservations are:
+The guard records conservative reservations for each API request and object write in a single, conditionally updated R2 ledger. Reservations are serialized and spaced within each warm server process to reduce R2's one-write-per-second same-key contention. Under heavy concurrent traffic the service fails closed rather than bypassing the guard. A rolling 31-day window covers billing periods that cross calendar months. The maximum reservations are:
 
 - **7,000,000,000 bytes** in cumulative positive compressed storage growth. Replacing a larger object with a smaller one does not refund budget. This ceiling is below the R2 Standard 10 GB-month free tier.
 - **650,000 Class A requests per rolling 31 days**, below the free 1,000,000 monthly allowance.

@@ -34,7 +34,16 @@ function guardRequired() {
   }
 }
 const budgetPause = ms => new Promise(resolve=>setTimeout(resolve,ms));
-export async function reserveR2Budget(reservation = {}) {
+let budgetGuardQueue=Promise.resolve();
+let previousBudgetWriteAt=0;
+// Serialize reservations per warm instance, avoiding same-key write bursts.
+// Cloudflare also rate limits different instances. CAS failures still fail closed.
+export function reserveR2Budget(reservation = {}) {
+  const pending=budgetGuardQueue.then(()=>reserveBudgetInternal(reservation));
+  budgetGuardQueue=pending.then(()=>{},()=>{});
+  return pending;
+}
+async function reserveBudgetInternal(reservation = {}) {
   guardRequired();
   if (Date.now() < budgetBlockedUntil) throw new R2BudgetError('R2 circuit breaker active; retry later');
   if (!configured()) throw new R2BudgetError('R2 credentials not configured');
@@ -61,6 +70,9 @@ export async function reserveR2Budget(reservation = {}) {
       throw new R2BudgetError(decision.reason);
     }
     try{
+      const elapsed=Date.now()-previousBudgetWriteAt;
+      if(elapsed<1100) await budgetPause(1100-elapsed);
+      previousBudgetWriteAt=Date.now();
       await client().send(new PutObjectCommand({
         Bucket:process.env.R2_BUCKET,Key:BUDGET_PATH,
         IfMatch:current.etag,
@@ -71,7 +83,7 @@ export async function reserveR2Budget(reservation = {}) {
     }catch(error){
       if(!collision(error)||attempt===4)
         throw new R2BudgetError('R2 budget ledger could not be updated: fail closed');
-      await budgetPause(100+attempt*175);
+      await budgetPause(350+attempt*350);
     }
   }
   throw new R2BudgetError('R2 budget unavailable');
@@ -81,7 +93,7 @@ function missing(error) {
     error?.$metadata?.httpStatusCode === 404;
 }
 function collision(error) {
-  return error?.$metadata?.httpStatusCode === 412 || error?.$metadata?.httpStatusCode === 409 ||
+  return error?.$metadata?.httpStatusCode === 412 || error?.$metadata?.httpStatusCode === 409 || error?.$metadata?.httpStatusCode === 429 ||
     error?.name === 'PreconditionFailed' || error?.name === 'ConditionalRequestConflict';
 }
 export async function readJson(path) {
@@ -113,7 +125,7 @@ async function editJson(path,merge) {
     const next=merge(existing?.value||null);
     if (next === null)return null;
     try{ await writeJson(path,next,existing?.etag||null,existing?.size||0);return next; }
-    catch(error){if(!collision(error)||i===8)throw error;}
+    catch(error){if(!collision(error)||i===8)throw error;await budgetPause(250+i*200);}
   }
   throw Error('R2 concurrent write retry limit exceeded');
 }
