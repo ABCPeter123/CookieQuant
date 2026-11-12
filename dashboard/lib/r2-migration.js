@@ -47,7 +47,9 @@ export async function migrateLegacyBatch(source) {
        firstAt:Date.parse(oldest.receivedAt)<priorFirst?oldest.receivedAt:current.firstAt,
        receivedAt:useNew?newest.receivedAt:current.receivedAt,
        payload:useNew?newest.payload:current.payload,
-       history,total:Math.max(current?.total||0,cursor+rows.length)
+       // The source cursor belongs to the CLI, not this helper. Keep the
+       // persisted estimate monotonic; the verifier checks exact source parity.
+       history,total:Math.max(current?.total||0,history.length)
      };
    });
 
