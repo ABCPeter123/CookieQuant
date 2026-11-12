@@ -14,14 +14,14 @@ Official Cookie Clicker browser tab
   ↳ Vercel serverless API validates, sanitizes and stores data
   ↳ Neon PostgreSQL, raw snapshots retained without an application-level expiry
 
-Dashboard: private Live Game mode
+Public dashboard: default Live Game mode
   ↳ GET https://cookiequant-dashboard.vercel.app/api/live
-     Authorization: Bearer <private read key>
+     No credential needed for viewing
   ↳ Latest snapshot plus sampled 24h, 7d, 30d, 1y or all-time history
   ↳ 30-second refresh. No trade actions.
 ```
 
-The publicly accessible dashboard opens in **Demo** mode. Demo data stays synthetic and is never mixed into live metrics.
+The public dashboard opens in **LIVE GAME** mode automatically. It fetches live snapshots and historical price data without any viewer key. Visitors can switch to **DEMO** mode, whose synthetic data stays separate. **All published game and trading telemetry is visible to anyone who knows the dashboard URL or the read-only API URLs.**
 
 ## Connect your game
 
@@ -33,7 +33,7 @@ The publicly accessible dashboard opens in **Demo** mode. Demo data stays synthe
    window.cookieClickToolkit.telemetry.connect("YOUR_PRIVATE_WRITE_KEY")
    ```
 
-4. Verify `window.cookieClickToolkit.telemetry.status` shows **Connected**, then go to the dashboard, switch to **LIVE GAME**, paste your **private read key**, and click CONNECT.
+4. Verify `window.cookieClickToolkit.telemetry.status` shows **Connected**, then open the dashboard. It displays the live game automatically. No viewer key, sign-in, or CONNECT action is required.
 5. The game uploads approximately once per minute while its tab is open and JavaScript is running. A successful connection initially uploads immediately.
 
 To stop uploading:
@@ -53,13 +53,13 @@ Browser background throttling, sleep, network failures and game updates can inte
 ## Security
 
 - The database connection lives only in the Vercel server environment, never in browser code.
-- Ingest and read use different 48-byte random bearer keys. The API rejects unauthenticated requests.
+- **Publishing is authenticated** with a private bearer write key. The `/api/telemetry` endpoint rejects requests without a valid key. **Read-only endpoints `/api/live` and `/api/history` are public** and require no credential.
 - Browser-origin checks allow game-origin uploads and dashboard-origin reads, but **the bearer tokens are the actual access control**.
-- The dashboard stores the viewer key in sessionStorage only. Do not publish the keys in GitHub, issue reports, screenshots or website copy.
+- The dashboard does not store a viewer key or ask visitors to connect. Do not publish the private **write key** in GitHub, screenshots, browser code, or website content.
 - The game saves the writer key in its origin-scoped localStorage, which browser extensions and scripts with matching privileges may be able to read.
 - Only whitelisted fields are stored. **Game saves, Game.seed, authentication cookies, IP addresses, emails and the keys themselves are not written to the telemetry table.**
 - The game communicates directly with the API over HTTPS. The browser dashboard cannot send commands, buy stock or change your game.
-- One shared read key provides access to all collected history. Anyone you give the viewer key can view the telemetry. Rotate both keys in Vercel to revoke access.
+- Anyone can view the published telemetry and stored history. Do not enable publishing if your game data must remain private. Rotate the **write key** in Vercel if it is compromised.
 - **No automatic deletion or expiration.** Snapshot history persists across browser restarts and is kept as long as the Neon database and account remain active.
 - Storage consumption and backup policies depend on your Neon plan. Configure regular exports or backups separately if you need disaster recovery guarantees.
 
@@ -82,7 +82,7 @@ An optional **joint-scenario correlation diagnostic** estimates cross-product co
 
 The dashboard's historical line chart shows **actual captured market quotes**. You can choose **24H, 7D, 30D, 1Y, or ALL TIME**. The backend samples up to 450 chart points from the selected period, evenly by stored snapshot count. This is a chart-display limit, **not a database retention limit**. The newest tick also appears in the live summary. The forecast markers are estimates from the gameplay automation. The dashboard does not invent live orders.
 
-Snapshots are stored once per `(game_run, market tick)`. A later upload for the same tick updates its existing row. Every distinct tick remains saved without application-level expiration. The `/api/live` endpoint provides the most recent 120 snapshots for lightweight refreshes; the authenticated `/api/history?range=all` endpoint produces representative samples from the entire stored period.
+Snapshots are stored once per `(game_run, market tick)`. A later upload for the same tick updates its existing row. Every distinct tick remains saved without application-level expiration. The `/api/live` endpoint provides the most recent 120 snapshots for lightweight refreshes; the public `/api/history?range=all` endpoint produces representative samples from the entire stored period.
 
 ## Hosting and operations
 
@@ -104,9 +104,8 @@ The Vercel project is linked to the repository with root directory `dashboard` a
 
 - `DATABASE_URL`: private Neon Postgres URL
 - `TELEMETRY_WRITE_KEY`: strong random write-only bearer key
-- `TELEMETRY_READ_KEY`: separate strong random read-only bearer key
 
-They must remain encrypted in Vercel project settings and must not be exposed through `NEXT_PUBLIC_*` or `VITE_*` variables.
+Keep `DATABASE_URL` and `TELEMETRY_WRITE_KEY` encrypted in Vercel project settings. Never expose them through `NEXT_PUBLIC_*` or `VITE_*` variables.
 
 ## Limits
 

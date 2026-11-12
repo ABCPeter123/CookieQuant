@@ -1,26 +1,14 @@
 import { neon } from '@neondatabase/serverless';
-import { createHash, timingSafeEqual } from 'node:crypto';
 
 const ORIGIN = 'https://cookiequant-dashboard.vercel.app';
-function authorized(req) {
-  const secret = process.env.TELEMETRY_READ_KEY;
-  const incoming = req.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{32,150})$/)?.[1];
-  if (!secret || !incoming || secret.length < 32) return false;
-  return timingSafeEqual(createHash('sha256').update(secret).digest(), createHash('sha256').update(incoming).digest());
-}
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  const origin = req.headers.origin;
-  if (origin && origin !== ORIGIN) return res.status(403).json({ error: 'Origin not allowed' });
-  if (origin === ORIGIN) {
-    res.setHeader('Access-Control-Allow-Origin', ORIGIN);
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  }
+  // Public, read-only telemetry. The game ingestion endpoint stays write-authenticated.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!authorized(req)) return res.status(401).json({ error: 'Invalid viewer key' });
   if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Storage unavailable' });
   const sql = neon(process.env.DATABASE_URL);
   try {
