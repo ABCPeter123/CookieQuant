@@ -1,48 +1,49 @@
 /**
- * One-time backfill from Neon to Cloudflare R2.
- * Needs DATABASE_URL, R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY.
- * Leave TELEMETRY_BACKEND=neon in production until copied data is verified.
+ * Resume the protected, lossless Neon -> R2 migration using Vercel production
+ * env variables loaded locally with Node.js --env-file. Does not delete source.
+ * Usage: node --env-file=.env.r2 dashboard/scripts/migrate-neon-r2.mjs [last-copied-id]
  */
 import { neon } from '@neondatabase/serverless';
-import { archiveSnapshot, latestSnapshot, configured } from '../lib/r2-storage.js';
+import { latestSnapshot, configured } from '../lib/r2-storage.js';
+import { migrateLegacyBatch } from '../lib/r2-migration.js';
 
-if(!configured())throw Error('R2 environment variables are missing');
-if(!process.env.DATABASE_URL)throw Error('DATABASE_URL is required for migration');
-const db=neon(process.env.DATABASE_URL);
-let lastId=Number(process.env.MIGRATE_AFTER_ID||0);
-if(!Number.isSafeInteger(lastId)||lastId<0)throw Error('Invalid MIGRATE_AFTER_ID');
-let migrated=0,errors=0,first=null,last=null;
-const limit=50;
-const delayMs=Number(process.env.R2_MIGRATION_DELAY_MS??1100);
-if(!Number.isFinite(delayMs)||delayMs<0||delayMs>30000)
-  throw Error('Invalid R2_MIGRATION_DELAY_MS');
-const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-while(true){
-  const rows=await db`SELECT id,received_at,payload FROM cq_telemetry_snapshots
-    WHERE id>${lastId} ORDER BY id ASC LIMIT ${limit}`;
-  if(!rows.length)break;
-  for(const row of rows){
-    const at=new Date(row.received_at).toISOString();
-    try{
-      await archiveSnapshot(row.payload,at,{preserveFull:true});
-      migrated++;
-      first=first||at;last=at;
-      lastId=Number(row.id);
-      if(migrated%50===0)console.log('Copied',migrated,'snapshots; last ID',lastId);
-      if(delayMs>0)await sleep(delayMs);
-    }catch(error){
-      errors++;
-      console.error('Migration halted at ID',row.id,'after',migrated,'records:',error?.message);
-      console.error('Resume by setting MIGRATE_AFTER_ID='+lastId);
-      process.exitCode=1;
-      break;
-    }
+if(!configured())throw Error('Missing R2 credentials');
+if(process.env.R2_COST_GUARD!=='enforced')throw Error('R2 cost guard must be enforced');
+if(!process.env.DATABASE_URL)throw Error('Missing Neon source URL');
+const sql=neon(process.env.DATABASE_URL);
+const start=process.argv[2] ?? process.env.MIGRATE_AFTER_ID ?? '0';
+let cursor=Number(start);
+if(!Number.isSafeInteger(cursor)||cursor<0)throw Error('Invalid last-copied ID');
+const firstCursor=cursor;
+let copied=0, batches=0;
+try{
+  while(true){
+    const source=await sql`SELECT id,received_at,payload FROM cq_telemetry_snapshots
+      WHERE id>${cursor} ORDER BY id ASC LIMIT 60`;
+    if(!source.length)break;
+    const result=await migrateLegacyBatch(source);
+    cursor=result.cursor;
+    copied+=result.migrated;
+    batches++;
+    console.log('Copied batch',batches,'rows',result.migrated,'latest source id',cursor);
+    // Let other R2 requests and Cloudflare same-key rate limits settle.
+    await new Promise(resolve=>setTimeout(resolve,1200));
   }
-  if(errors)break;
+  const state=await latestSnapshot();
+  const sourceSummary=await sql`SELECT count(*)::int AS count,max(id) AS latest_id,
+    min(received_at) AS first_at,max(received_at) AS last_at FROM cq_telemetry_snapshots`;
+  console.log(JSON.stringify({
+    copiedThisRun:copied,batches,resumedFrom:firstCursor,lastCopiedId:cursor,
+    sourceRows:sourceSummary[0].count,sourceLastId:sourceSummary[0].latest_id,
+    r2FirstAt:state?.firstAt||null,r2LastAt:state?.receivedAt||null,
+    note:'Verify R2 source timestamps and counts before setting TELEMETRY_BACKEND=r2'
+  },null,2));
+  if(Number(sourceSummary[0].latest_id||0)>cursor){
+    console.error('New records arrived during migration. Run the same command again, starting at ID '+cursor);
+    process.exitCode=2;
+  }
+}catch(error){
+  console.error('Migration stopped at source id',cursor,':',error?.message);
+  console.error('Retry with: node --env-file=.env.r2 dashboard/scripts/migrate-neon-r2.mjs '+cursor);
+  process.exitCode=1;
 }
-const archived=await latestSnapshot();
-console.log(JSON.stringify({
-  migrated,errors,lastId,sourceFirstAt:first,sourceLastAt:last,
-  r2FirstAt:archived?.firstAt||null,r2LatestAt:archived?.receivedAt||null,
-  instructions:errors?'Resume from last successful ID':'Re-run from the start to catch up with any new Neon snapshots before cutover'
-},null,2));

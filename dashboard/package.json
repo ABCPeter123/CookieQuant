@@ -8,7 +8,8 @@
     "build": "node scripts/build.mjs",
     "test": "node --test ../tests/dashboard.test.mjs",
     "migrate:r2": "node scripts/migrate-neon-r2.mjs",
-    "init:r2-budget": "node scripts/init-r2-budget.mjs"
+    "init:r2-budget": "node scripts/init-r2-budget.mjs",
+    "verify:r2": "node scripts/verify-r2-history.mjs"
   },
   "engines": {
     "node": ">=22"

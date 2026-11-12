@@ -45,7 +45,13 @@ test('migration is explicit, resumable and never deletes source rows',async()=>{
   const script=await read('../dashboard/scripts/migrate-neon-r2.mjs');
   assert.match(script,/MIGRATE_AFTER_ID/);
   assert.match(script,/archiveSnapshot/);
-  assert.match(script,/preserveFull:true/);
+  assert.match(script,/migrateLegacyBatch/);
+  const helper=await read('../dashboard/lib/r2-migration.js');
+  assert.match(helper,/legacy-full/);
+  assert.match(helper,/compactSnapshot/);
+  assert.match(helper,/reserveR2Budget/);
+  const verify=await read('../dashboard/scripts/verify-r2-history.mjs');
+  assert.match(verify,/missing===0/);
   assert.match(script,/ORDER BY id ASC/);
   assert.doesNotMatch(script,/\bDELETE FROM\b|\bDROP TABLE\b/);
   const docs=await read('../docs/CLOUD_TELEMETRY.md');

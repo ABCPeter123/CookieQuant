@@ -31,6 +31,8 @@ jobs:
           node --check dashboard/lib/r2-budget-core.js
           node --check dashboard/scripts/init-r2-budget.mjs
           node --check dashboard/scripts/migrate-neon-r2.mjs
+          node --check dashboard/lib/r2-migration.js
+          node --check dashboard/scripts/verify-r2-history.mjs
           node --check dashboard/api/health.js
           node --check dashboard/js/telemetry-health.js
           node --check dashboard/lib/health-core.js
