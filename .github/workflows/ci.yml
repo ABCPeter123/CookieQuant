@@ -22,6 +22,8 @@ jobs:
           npm run check
           node --check dashboard/js/app.js
           node --check dashboard/js/live.js
+          node --check dashboard/js/quant-terminal.js
+          node --check dashboard/js/quant-math.js
           node --check dashboard/js/model.js
           node --check dashboard/api/history.js
           node --check dashboard/api/live.js

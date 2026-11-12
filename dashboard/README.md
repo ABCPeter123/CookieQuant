@@ -34,3 +34,11 @@ Vercel project: `cookiequant-dashboard`, rooted at `dashboard`. Vercel runs `npm
 ## License
 
 The original project code is MIT-licensed. Cookie Clicker and Cookie Monster remain distinct third-party projects.
+
+## Live quantitative terminal
+
+In the authenticated **LIVE GAME** mode, the market page renders all Cookie Clicker products in a single price-tape chart with synchronized timestamps. The default view plots each product's percentage return since its first observed quote in the chosen date range, with an option for raw market-dollar prices. Choose an asset in the legend, forecast interval chart or execution matrix to emphasize it. Toggle **ISOLATE** to inspect only that product on the historical price chart.
+
+The quantitative forecast surface displays each stock's expected terminal return and modeled 5th to 95th percentile interval from the **256 real shared-shock Monte Carlo terminal scenarios** uploaded by the CookieQuant userscript. A per-stock histogram, fee-aware chance of profit, conditional worst-5% terminal return, terminal volatility, position targets and cross-asset correlation diagnostics provide detailed analysis.
+
+The projected terminal outcomes are model scenarios, not observed prices, future timestamps, or guaranteed returns. The dashboard does not manufacture intermediate forecast paths. All real quote history remains in the Neon database without application-side expiry.

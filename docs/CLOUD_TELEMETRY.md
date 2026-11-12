@@ -74,6 +74,12 @@ Browser background throttling, sleep, network failures and game updates can inte
 | Performance | Realized simulated-market-dollar P&L, trade count and the latest action |
 | Automation | Short stock, Garden, Godzamok, Ascension and Dragon status summaries |
 
+The dashboard's **cross-asset price tape** shows every stock on a common time axis. RETURN % rebases each stock to its first observed price in the selected time range; PRICE $ shows raw market-dollar quotes. All 18 stocks are visible by default, with an optional isolate/focus mode. Click any ticker to emphasize it and open its full forecast distribution.
+
+A **cross-sectional forecast surface** displays all 18 products as their Monte Carlo P05–P95 terminal return intervals with expected return, median and after-buy-fee profit probability. An 18-row forecast/execution matrix exposes each asset's price, mean, expected edge, P05–P95, modeled gain probability, held shares, target shares and buy/trim/hold recommendation. The selected stock's histogram is constructed directly from the engine's 256 terminal price scenarios.
+
+An optional **joint-scenario correlation diagnostic** estimates cross-product correlations from the aligned 256 Monte Carlo outcomes using the common random shocks. Correlation refers to the simulation, not observed market returns.
+
 The dashboard's historical line chart shows **actual captured market quotes**. You can choose **24H, 7D, 30D, 1Y, or ALL TIME**. The backend samples up to 450 chart points from the selected period, evenly by stored snapshot count. This is a chart-display limit, **not a database retention limit**. The newest tick also appears in the live summary. The forecast markers are estimates from the gameplay automation. The dashboard does not invent live orders.
 
 Snapshots are stored once per `(game_run, market tick)`. A later upload for the same tick updates its existing row. Every distinct tick remains saved without application-level expiration. The `/api/live` endpoint provides the most recent 120 snapshots for lightweight refreshes; the authenticated `/api/history?range=all` endpoint produces representative samples from the entire stored period.

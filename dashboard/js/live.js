@@ -1,7 +1,9 @@
+import { mountQuantTerminal } from './quant-terminal.js';
 /* Cloud telemetry UI. No writer credential or game-control API is bundled here. */
 const CLOUD_ENDPOINT = '/api/live';
 const CLOUD_HISTORY_ENDPOINT = '/api/history';
 const HISTORY_RANGES = ['24h', '7d', '30d', '1y', 'all'];
+let quantTerminal;
 const cloud = { key: sessionStorage.getItem('cookiequant:viewer') || '', latest: null, history: [], timer: null, active: false, selected: null, historyRange: '24h', historyLoaded: '', historyLastFetched: 0, historyTotal: 0, historyRequest: 0 };
 
 const cloudCss = `
@@ -88,6 +90,12 @@ function showMode(isLive) {
   el('tab-live').classList.toggle('active',isLive);
   el('tab-demo').classList.toggle('active',!isLive);
   el('auth').hidden=!isLive;
+  const demoNotice=document.querySelector('.notice[role="note"]');
+  if(demoNotice)demoNotice.style.display=isLive?'none':'';
+  const marketDescription=document.querySelector('#market .section-heading-row p');
+  if(marketDescription)marketDescription.textContent=isLive?
+    'Live stock prices, shared-shock Monte Carlo forecasts, and risk-aware trading signals.':
+    'Simulate the next 10–20 market ticks, then let the optimizer pick a portfolio.';
   el('live').classList.toggle('visible',isLive && Boolean(cloud.latest));
   document.querySelectorAll('#market .metric-grid,#market .terminal-grid,#market .analysis-grid').forEach(node=>node.style.display=isLive?'none':'');
   if(cloud.timer){clearInterval(cloud.timer);cloud.timer=null;}
@@ -106,21 +114,6 @@ function renderLive() {
     <div class="telemetry-kpi"><label>WORST-5% LOSS</label><strong>${number((m.modeledRisk||0)*100)}%</strong><small>RISK LIMIT ${number((m.riskLimit||0)*100,0)}%</small></div>
     <div class="telemetry-kpi"><label>MARKED HOLDINGS</label><strong>$${fmt(held)}</strong><small>${number(total,0)} SHARES · MARKET DOLLARS</small></div>
     <div class="telemetry-kpi"><label>REALIZED P&L</label><strong>$${fmt(stats.realizedDollars)}</strong><small>${number(stats.trades,0)} TRADES</small></div>`;
-  if(!goods.some(g=>g.id===cloud.selected))cloud.selected=goods[0]?.id??null;
-  el('stocks').replaceChildren();
-  for (const g of goods) {
-    const b=document.createElement('button');
-    b.textContent=g.symbol;b.className=g.id===cloud.selected?'selected':'';
-    b.addEventListener('click',()=>{cloud.selected=g.id;renderLive();});
-    el('stocks').appendChild(b);
-  }
-  const body=el('rows');body.replaceChildren();
-  for (const g of goods) {
-    const tr=document.createElement('tr');tr.dataset.stock=g.id;
-    const edge=Number(g.mean||0)-Number(g.price||0);
-    tr.innerHTML=`<td>${safe(g.symbol)}</td><td>$${number(g.price)}</td><td>$${number(g.mean)}</td><td class="${edge>=0?'positive':'negative'}">${edge>=0?'+':''}${number(edge)}</td><td>${number(g.stock,0)} / ${number(g.target,0)}</td>`;
-    tr.addEventListener('click',()=>{cloud.selected=g.id;renderLive();});body.appendChild(tr);
-  }
   const modules=data.modules||{}, modEl=el('modules');modEl.replaceChildren();
   for(const [name,value] of [['STOCKS',modules.stock],['GARDEN',modules.garden],['GODZAMOK',modules.godzamok],['ASCENSION',modules.ascension],['DRAGON',modules.dragon],['LATEST TRADE',stats.lastAction]]) {
     const item=document.createElement('div');item.className='telemetry-module';
@@ -128,40 +121,11 @@ function renderLive() {
     const body=document.createElement('span');body.textContent=value||'No status reported';
     item.append(head,body);modEl.appendChild(item);
   }
-  const rangeLabel=cloud.historyRange==='all'?'all time':cloud.historyRange.toUpperCase();
-  const shown=cloud.history.length;
-  const historicalCount=cloud.historyLoaded===cloud.historyRange?cloud.historyTotal:shown;
-  el('stock-caption').textContent=goods.length
-    ?'Actual prices · '+shown+' chart points from '+number(historicalCount,0)+' recorded snapshots ('+rangeLabel+'). Forecast mean and 5th/95th percentile appear at the right edge. The underlying history is retained without expiration.'
-    :'Bank minigame not available yet.';
-  renderGraph();
-}
-function renderGraph() {
-  const canvas=el('chart'),box=canvas.getBoundingClientRect();if(box.width<30)return;
-  const dpr=Math.min(devicePixelRatio||1,2);canvas.width=Math.floor(box.width*dpr);canvas.height=Math.floor(box.height*dpr);
-  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
-  const w=box.width,h=box.height,left=44,right=w-25,top=17,bottom=h-27;
-  const selected=cloud.latest?.market?.goods?.find(g=>g.id===cloud.selected);if(!selected)return;
-  const samples=cloud.history.map(row=>({
-    date:new Date(row.receivedAt).getTime(),value:row.market?.goods?.find(g=>g.id===selected.id)?.price
-  })).filter(x=>Number.isFinite(x.value)).slice(-450);
-  if(!samples.length)return;
-  const values=[...samples.map(x=>x.value),selected.mean,selected.low,selected.high];
-  let low=Math.min(...values),high=Math.max(...values);
-  const buffer=Math.max(2,(high-low)*.16);low=Math.max(0,low-buffer);high+=buffer;
-  const y=n=>top+(bottom-top)*(high-n)/(high-low);
-  const x=i=>left+(right-left-50)*(samples.length===1?0.5:i/(samples.length-1));
-  ctx.font='10px IBM Plex Mono, monospace';ctx.strokeStyle='#293b35';ctx.fillStyle='#81978b';
-  for(let j=0;j<=4;j++){const val=low+(high-low)*j/4,py=y(val);ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(right,py);ctx.stroke();ctx.textAlign='right';ctx.fillText('$'+number(val,0),left-6,py+4);}
-  ctx.fillStyle='#859d91';ctx.textAlign='left';ctx.fillText(samples.length>1?new Date(samples[0].date).toLocaleTimeString():'FIRST DATA POINT',left,bottom+19);ctx.textAlign='right';ctx.fillText('NOW',right-50,bottom+19);
-  ctx.strokeStyle='#b7f4ba';ctx.lineWidth=2.4;ctx.beginPath();samples.forEach((p,i)=>i?ctx.lineTo(x(i),y(p.value)):ctx.moveTo(x(i),y(p.value)));ctx.stroke();
-  const last=x(samples.length-1),fx=right-6;
-  ctx.fillStyle='#b7f4ba';ctx.beginPath();ctx.arc(last,y(samples.at(-1).value),3,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#f1c584';ctx.setLineDash([5,4]);ctx.lineWidth=1.4;
-  ctx.beginPath();ctx.moveTo(last,y(samples.at(-1).value));ctx.lineTo(fx,y(selected.mean));ctx.stroke();
-  ctx.strokeStyle='#86aebc8c';ctx.beginPath();ctx.moveTo(fx,y(selected.low));ctx.lineTo(fx,y(selected.high));ctx.stroke();ctx.setLineDash([]);
-  ctx.fillStyle='#f1c584';ctx.beginPath();ctx.arc(fx,y(selected.mean),3,0,Math.PI*2);ctx.fill();
-  canvas.setAttribute('aria-label',selected.name+': latest price $'+number(selected.price)+', forecast mean $'+number(selected.mean)+', '+samples.length+' historical observations');
+  quantTerminal?.render(data,cloud.history,{
+    historyRange:cloud.historyRange,
+    historyLoaded:cloud.historyLoaded,
+    historyTotal:cloud.historyTotal
+  });
 }
 
 export function initCloudTelemetry() {
@@ -179,10 +143,7 @@ export function initCloudTelemetry() {
     <div id="cloud-live" class="telemetry-live">
       <div class="subhead"><strong>Live game telemetry</strong><span id="cloud-date">WAITING FOR FIRST UPLOAD</span></div>
       <div id="cloud-kpis" class="telemetry-kpis"></div>
-      <div class="telemetry-cols">
-        <div class="telemetry-surface"><h4>Actual market history</h4><div id="cloud-ranges" class="telemetry-ranges"><button type="button" data-range="24h" class="active">24H</button><button type="button" data-range="7d">7D</button><button type="button" data-range="30d">30D</button><button type="button" data-range="1y">1Y</button><button type="button" data-range="all">ALL TIME</button></div><div id="cloud-stocks" class="telemetry-stock-picker"></div><canvas id="cloud-chart" class="telemetry-chart" role="img" aria-label="Historical stock price"></canvas><p id="cloud-stock-caption"></p></div>
-        <div class="telemetry-surface"><h4>Current holdings &amp; forecast</h4><div style="overflow-x:auto"><table class="telemetry-stock-table"><thead><tr><th>ASSET</th><th>SPOT</th><th>MEAN</th><th>EDGE</th><th>OWN/TARGET</th></tr></thead><tbody id="cloud-rows"></tbody></table></div></div>
-      </div>
+      <div id="cloud-quant"></div>
       <div id="cloud-modules" class="telemetry-modules"></div>
       <p class="telemetry-live-note">Original engine forecasts are captured on real stock market ticks. No demo returns or fabricated transactions appear in live mode.</p>
     </div>
@@ -191,6 +152,7 @@ export function initCloudTelemetry() {
       <div class="telemetry-writer"><input type="password" id="cloud-writer" autocomplete="off" placeholder="Paste your private publisher key" aria-label="Private publisher key" /><button id="cloud-copy" type="button">COPY GAME CONSOLE COMMAND</button></div>
     </details>`;
   metrics.before(element);
+  quantTerminal=mountQuantTerminal(el('quant'));
   el('ranges').querySelectorAll('button[data-range]').forEach(button=>{
     button.addEventListener('click',()=>{
       const range=button.dataset.range;
@@ -224,6 +186,5 @@ export function initCloudTelemetry() {
     catch{status('Clipboard unavailable. Open the game console and call cookieClickToolkit.telemetry.connect(...) manually.',true);}
     el('writer').value='';
   });
-  const observer=new ResizeObserver(()=>{if(cloud.active&&cloud.latest)renderGraph();});observer.observe(el('chart'));
   if(cloud.key){showMode(true);}
 }
