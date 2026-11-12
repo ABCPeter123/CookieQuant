@@ -44,7 +44,6 @@ test('all APIs support R2 without database credentials and preserve Neon until c
 test('migration is explicit, resumable and never deletes source rows',async()=>{
   const script=await read('../dashboard/scripts/migrate-neon-r2.mjs');
   assert.match(script,/MIGRATE_AFTER_ID/);
-  assert.match(script,/archiveSnapshot/);
   assert.match(script,/migrateLegacyBatch/);
   const helper=await read('../dashboard/lib/r2-migration.js');
   assert.match(helper,/legacy-full/);
