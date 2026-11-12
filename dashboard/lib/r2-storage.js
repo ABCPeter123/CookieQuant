@@ -2,6 +2,7 @@ import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { compactSnapshot, shouldArchiveScenarios } from './archive-policy.js';
 import { applyReservation } from './r2-budget-core.js';
+import { explainR2Failure } from './r2-diagnostics.js';
 
 const PREFIX = 'cookiequant/v1';
 const DAY_MS = 86_400_000;
@@ -60,7 +61,7 @@ async function reserveBudgetInternal(reservation = {}) {
     }catch(error){
       if(missing(error))throw new R2BudgetError('R2 disabled: initialize the cost guard on an empty bucket first');
       if(error?.name==='R2BudgetError')throw error;
-      throw new R2BudgetError('R2 cost guard unreadable: fail closed');
+      throw new R2BudgetError('R2 cost guard unreadable: '+explainR2Failure(error)+' Fail closed.');
     }
     const decision=applyReservation(current.value,reservation,new Date());
     if(!decision.ok){
