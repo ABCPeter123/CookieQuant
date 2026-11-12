@@ -31,7 +31,7 @@ test('opt-in game publisher exists in shipped runtime',async()=>{
  assert.match(src,/document\.addEventListener\("visibilitychange", onTelemetryVisibility\)/);
  assert.match(src,/toolkit\.telemetry\?\.cleanup\?\.\(\)/);
  assert.ok(user.includes('const CQ_TELEMETRY_KEY'));
- assert.match(user,/cookieClickToolkit\.version === "2026\.11\.12\.2"/);
+ assert.match(user,/cookieClickToolkit\.version === "2026\.11\.12\.3"/);
  assert.ok(user.includes('@version      2026.11.12.3'));
  assert.doesNotMatch(src,/const CQ_BUNDLED_WRITE_KEY\s*=\s*['\"][A-Za-z0-9_-]{32,}/);
  new Script(src);
