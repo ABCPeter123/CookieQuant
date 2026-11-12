@@ -25,16 +25,18 @@ The public dashboard opens in **LIVE GAME** mode automatically. It fetches live 
 
 ## Connect your game
 
-1. Install the current `dist/cookie-quant.user.js` from GitHub in Tampermonkey or another userscript manager.
+1. **For the personal, automatic version:** Install the private `CookieQuant-Personal-Auto-Telemetry.user.js` file generated locally for the account owner. It contains the write key and uses `@require` to load CookieQuant from the public repository. Disable the older, separate CookieQuant userscript in Tampermonkey so the game only runs one engine. Never commit or share the personal installer.
+
+   **For the public version:** Install the normal `dist/cookie-quant.user.js` from GitHub. This public source deliberately contains **no write key**. Pair the publisher once using `telemetry.connect(...)` as shown below, after which the connection persists in the game's localStorage.
 2. Open the official game at https://orteil.dashnet.org/cookieclicker/.
-3. Open DevTools → Console, then run:
+3. If using the **public** script for the first time, open DevTools → Console and run (skip this for the private auto installer):
 
    ```js
    window.cookieClickToolkit.telemetry.connect("YOUR_PRIVATE_WRITE_KEY")
    ```
 
-4. Verify `window.cookieClickToolkit.telemetry.status` shows **Connected**, then open the dashboard. It displays the live game automatically. No viewer key, sign-in, or CONNECT action is required.
-5. The game uploads approximately once per minute while its tab is open and JavaScript is running. A successful connection initially uploads immediately.
+4. Confirm that `window.cookieClickToolkit.telemetry.status` shows **Connected**, then open the dashboard. It displays the live game automatically. No viewer key, sign-in, or CONNECT action is required.
+5. The game starts publishing automatically on every game reload when it has a stored write key. It uploads about once per minute while the tab is running and also checks publisher health every 15 seconds.
 
 To stop uploading:
 
@@ -48,7 +50,16 @@ To send a fresh snapshot manually:
 window.cookieClickToolkit.telemetry.push()
 ```
 
-Browser background throttling, sleep, network failures and game updates can interrupt uploads. The dashboard displays its last-seen time and identifies stale data. The game continues working if the telemetry service is unavailable.
+### Automatic recovery
+
+- A 12-second request timeout detects stalled uploads.
+- On failed uploads, the client retries with randomized exponential backoff from about 8 seconds to a maximum of about 5 minutes. Failures do **not** stop game automation.
+- A 15-second watchdog detects a stale connection (more than 150 seconds since the last successful upload) and restarts sending.
+- `online`, browser `focus`, `pageshow`, and visible-tab events trigger recovery when the browser reconnects or the device wakes. Duplicate bursts are suppressed.
+- After a game reload, the saved publisher settings start uploading automatically. The personal installer can restore the stored publisher key if localStorage was reset.
+- Use `window.cookieClickToolkit.telemetry.health` in the game console to inspect last successful upload, retry time, error count, and whether the connection is stale. To force a new attempt: `window.cookieClickToolkit.telemetry.reconnect()`.
+
+Network failures, sleeping tabs, and lost connectivity can still leave gaps in time-series capture. The dashboard shows the last-seen timestamp and identifies stale data. The game continues working if the telemetry service is unavailable.
 
 ## Security
 
@@ -56,7 +67,7 @@ Browser background throttling, sleep, network failures and game updates can inte
 - **Publishing is authenticated** with a private bearer write key. The `/api/telemetry` endpoint rejects requests without a valid key. **Read-only endpoints `/api/live` and `/api/history` are public** and require no credential.
 - Browser-origin checks allow game-origin uploads and dashboard-origin reads, but **the bearer tokens are the actual access control**.
 - The dashboard does not store a viewer key or ask visitors to connect. Do not publish the private **write key** in GitHub, screenshots, browser code, or website content.
-- The game saves the writer key in its origin-scoped localStorage, which browser extensions and scripts with matching privileges may be able to read.
+- The public game script never contains the write key. The **personal installer** embeds it locally, and the game saves it in origin-scoped localStorage. Other locally installed scripts or browser extensions with matching privileges may read it. Never publish or share the personal installer.
 - Only whitelisted fields are stored. **Game saves, Game.seed, authentication cookies, IP addresses, emails and the keys themselves are not written to the telemetry table.**
 - The game communicates directly with the API over HTTPS. The browser dashboard cannot send commands, buy stock or change your game.
 - Anyone can view the published telemetry and stored history. Do not enable publishing if your game data must remain private. Rotate the **write key** in Vercel if it is compromised.

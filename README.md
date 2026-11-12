@@ -22,7 +22,7 @@ Live mode now provides a **cross-asset quantitative terminal**: 18 synchronized 
 
 Raw snapshots are now retained **indefinitely without application-level deletion**. The public live dashboard offers 24H, 7D, 30D, 1Y, and ALL TIME price-history views. Long ranges are downsampled for charts, but the underlying records remain in Neon.
 
-The dashboard opens directly in **LIVE GAME** mode without a viewer key or sign-in. **Anyone with the URL can view your published game data and its history.** Demo mode stays separate and synthetic. Only the *publisher* needs a private write credential, set once in the game console with `cookieClickToolkit.telemetry.connect("YOUR_PRIVATE_WRITE_KEY")`. Never publish this write credential. See the [cloud telemetry installation and security guide](docs/CLOUD_TELEMETRY.md).
+The dashboard opens in **LIVE GAME** mode without a viewer key or sign-in. **Anyone with the URL can view your published game data and its history.** Demo stays separate. Game publishing requires a secret write credential. You can either install a **private personalized userscript** containing the key (generated outside GitHub) or configure the public userscript once using `cookieClickToolkit.telemetry.connect("YOUR_PRIVATE_WRITE_KEY")`. Both reconnect automatically after network errors, browser sleep, and page reloads. Never commit your personal script or write key. See the [cloud telemetry setup and recovery guide](docs/CLOUD_TELEMETRY.md).
 
 ## Interactive research dashboard
 

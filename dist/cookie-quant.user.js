@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.10.3
+// @version      2026.11.12.1
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.10.3" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.1" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.10.3";
+        const TOOLKIT_VERSION = "2026.11.12.1";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -6248,6 +6248,7 @@
           clearInterval(toolkit.gardenTimer);
           clearInterval(toolkit.stockTimer);
           clearInterval(toolkit.telemetryTimer);
+          toolkit.telemetry?.cleanup?.();
           clearInterval(toolkit.forceHandTimer);
           clearInterval(toolkit.godzamokTimer);
           clearInterval(toolkit.pantheonTimer);
@@ -6282,9 +6283,13 @@
         window.cookieClickToolkit = toolkit;
         window.clickIncomeMeter = toolkit;
       
-        /* Cloud telemetry is opt-in and does not alter gameplay decisions. */
+        /* Cloud telemetry: opt-in credentials, automatic startup and self-healing delivery. */
         const CQ_TELEMETRY_KEY = "cookiequant:telemetry:v1";
         const CQ_TELEMETRY_URL = "https://cookiequant-dashboard.vercel.app/api/telemetry";
+        const CQ_TELEMETRY_INTERVAL_MS = 60_000;
+        const CQ_TELEMETRY_TIMEOUT_MS = 12_000;
+        const CQ_TELEMETRY_STALE_MS = 150_000;
+        const CQ_TELEMETRY_WATCHDOG_MS = 15_000;
         const cloudConfig = () => {
           try { return JSON.parse(localStorage.getItem(CQ_TELEMETRY_KEY) || "null"); }
           catch { return null; }
@@ -6296,27 +6301,83 @@
           return window.crypto?.randomUUID?.() || ("cq" + Date.now() + Math.random().toString(36).slice(2));
         };
         toolkit.telemetry = {
-          status: "Disabled. Call cookieClickToolkit.telemetry.connect('YOUR_WRITE_KEY') to opt in.",
+          status: "Disabled. Install the personalized publisher or connect a private write key.",
+          pending: false,
+          lastSent: 0,
+          lastAttemptAt: 0,
+          nextAttemptAt: 0,
+          consecutiveFailures: 0,
+          get health() {
+            return {
+              enabled: !!cloudConfig()?.enabled, status: this.status,
+              pending: this.pending, lastSent: this.lastSent ? new Date(this.lastSent).toISOString() : null,
+              failures: this.consecutiveFailures,
+              nextAttempt: this.nextAttemptAt ? new Date(this.nextAttemptAt).toISOString() : null,
+              stale: !!this.lastSent && Date.now() - this.lastSent > CQ_TELEMETRY_STALE_MS
+            };
+          },
           connect(writeKey) {
             if (typeof writeKey !== "string" || !/^[A-Za-z0-9_-]{32,150}$/.test(writeKey)) {
               throw Error("Expected a valid private telemetry write key.");
             }
             const settings = { key: writeKey, run: cloudRun(), enabled: true };
             localStorage.setItem(CQ_TELEMETRY_KEY, JSON.stringify(settings));
-            this.status = "Connecting";
-            void this.push();
-            return "Cloud telemetry enabled. Use cookieClickToolkit.telemetry.status for health.";
+            this.consecutiveFailures = 0;
+            this.nextAttemptAt = 0;
+            this.status = "Publisher configured. Connecting...";
+            this.reconnect("publisher configured");
+            return "Cloud publishing enabled with automatic recovery.";
           },
           disconnect() {
             localStorage.removeItem(CQ_TELEMETRY_KEY);
-            this.status = "Disabled";
-            return "Cloud telemetry disconnected. Stored cloud history remains until its 30-day expiry.";
+            this.requestController?.abort();
+            this.consecutiveFailures = 0;
+            this.nextAttemptAt = 0;
+            this.status = "Publishing disabled";
+            return "Publisher disabled. Stored cloud history remains intact.";
           },
-          async push() {
+          reconnect(reason = "manual") {
+            if (!toolkit.active || !cloudConfig()?.enabled || !cloudConfig()?.key) return false;
+            // Multiple browser wake events should not duplicate requests or cause bursts.
+            if (this.pending || Date.now() - this.lastAttemptAt < 4_000) return false;
+            this.nextAttemptAt = 0;
+            this.status = "Reconnecting: " + reason;
+            void this.push(true);
+            return true;
+          },
+          checkHealth() {
+            if (!toolkit.active || !cloudConfig()?.enabled) return;
+            const now = Date.now();
+            if (this.pending) {
+              if (now - this.lastAttemptAt > CQ_TELEMETRY_TIMEOUT_MS + 8_000)
+                this.requestController?.abort();
+              return;
+            }
+            if (this.lastSent && now - this.lastSent > CQ_TELEMETRY_STALE_MS &&
+                !this.consecutiveFailures) {
+              this.status = "Telemetry stale. Reconnecting...";
+              this.nextAttemptAt = 0;
+            }
+            if (!this.lastAttemptAt || now >= this.nextAttemptAt) void this.push();
+          },
+          async push(force = false) {
             if (!toolkit.active || !window.Game?.ready) return false;
             const settings = cloudConfig();
-            if (!settings?.enabled || !settings.key) return false;
-            if (this.pending) return false;
+            if (!settings?.enabled || !settings.key || this.pending) return false;
+            const now = Date.now();
+            if (!force && now < this.nextAttemptAt) return false;
+            if (navigator.onLine === false) {
+              this.status = "Offline. Will resume automatically when network returns.";
+              this.nextAttemptAt = now + 10_000;
+              return false;
+            }
+            this.pending = true;
+            this.lastAttemptAt = now;
+            this.nextAttemptAt = now + CQ_TELEMETRY_INTERVAL_MS;
+            const controller = new AbortController();
+            this.requestController = controller;
+            const timeout = setTimeout(() => controller.abort(), CQ_TELEMETRY_TIMEOUT_MS);
+            try {
             const market = getStockMarket();
             const book = market ? stockBookFor(market) : null;
             const tick = market ? Number(market.ticks) : Math.floor(Date.now() / 60000);
@@ -6371,28 +6432,61 @@
                 ascension: toolkit.ascensionStatus || "", dragon: toolkit.dragonStatus || ""
               }
             };
-            this.pending = true;
-            this.status = "Sending snapshot for tick " + tick;
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 12000);
-            try {
+              this.status = "Sending snapshot for tick " + tick;
               const response = await fetch(CQ_TELEMETRY_URL, {
                 method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + settings.key },
                 body: JSON.stringify(snapshot), mode: "cors", cache: "no-store", signal: controller.signal
               });
               if (!response.ok) throw Error("HTTP " + response.status);
+              // Don't report connected if the user disabled publishing during the request.
+              if (!toolkit.active || !cloudConfig()?.enabled) return false;
               this.lastSent = Date.now();
-              this.status = "Connected. Last upload " + new Date(this.lastSent).toLocaleTimeString() + " (tick " + tick + ")";
+              this.consecutiveFailures = 0;
+              this.nextAttemptAt = this.lastSent + CQ_TELEMETRY_INTERVAL_MS;
+              this.status = "Connected. Last upload " + new Date(this.lastSent).toLocaleTimeString() +
+                " (tick " + tick + ")";
               return true;
-            } catch(error) {
-              this.status = "Upload failed: " + (error?.message || String(error));
-              console.warn("[CookieQuant] Cloud telemetry: " + this.status);
+            } catch (error) {
+              if (!toolkit.active || !cloudConfig()?.enabled) return false;
+              this.consecutiveFailures++;
+              const backoff = Math.min(5 * 60_000, 8_000 * Math.pow(2, Math.min(this.consecutiveFailures - 1, 6)));
+              const retry = Math.round(backoff * (0.9 + Math.random() * 0.2));
+              this.nextAttemptAt = Date.now() + retry;
+              const reason = error?.name === "AbortError" ? "Timed out" : (error?.message || String(error));
+              this.status = "Disconnected (" + reason + "). Retrying in " + Math.ceil(retry / 1000) + "s";
+              if (this.consecutiveFailures === 1 || this.consecutiveFailures % 5 === 0) {
+                console.warn("[CookieQuant] Cloud telemetry: " + this.status);
+              }
               return false;
-            } finally { clearTimeout(timeout); this.pending = false; }
+            } finally {
+              clearTimeout(timeout);
+              if (this.requestController === controller) this.requestController = null;
+              this.pending = false;
+            }
+          },
+          cleanup() {
+            this.requestController?.abort();
+            window.removeEventListener("online", onTelemetryRecovery);
+            window.removeEventListener("focus", onTelemetryRecovery);
+            window.removeEventListener("pageshow", onTelemetryRecovery);
+            document.removeEventListener("visibilitychange", onTelemetryVisibility);
           }
         };
-        toolkit.telemetryTimer = setInterval(() => { if (toolkit.active) void toolkit.telemetry.push(); }, 60000);
-        if (cloudConfig()?.enabled) setTimeout(() => { if (toolkit.active) void toolkit.telemetry.push(); }, 6000);
+        const onTelemetryRecovery = () => {
+          if (!cloudConfig()?.enabled || !toolkit.active) return;
+          const t = toolkit.telemetry;
+          if (!t.lastSent || t.consecutiveFailures || Date.now() - t.lastSent >= CQ_TELEMETRY_INTERVAL_MS)
+            t.reconnect("network or browser resumed");
+        };
+        const onTelemetryVisibility = () => {
+          if (!document.hidden) onTelemetryRecovery();
+        };
+        window.addEventListener("online", onTelemetryRecovery);
+        window.addEventListener("focus", onTelemetryRecovery);
+        window.addEventListener("pageshow", onTelemetryRecovery);
+        document.addEventListener("visibilitychange", onTelemetryVisibility);
+        toolkit.telemetryTimer = setInterval(() => toolkit.telemetry.checkHealth(), CQ_TELEMETRY_WATCHDOG_MS);
+        if (cloudConfig()?.enabled) setTimeout(() => toolkit.telemetry.reconnect("automatic startup"), 1_500);
       
         saveControls();
         console.log(`Cookie Toolkit ${TOOLKIT_VERSION} loaded. Garden synchronization, smart soil and measured Godzamok profit are installed.`);
