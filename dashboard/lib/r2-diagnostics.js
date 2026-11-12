@@ -15,6 +15,17 @@ export function explainR2Failure(error) {
     return 'Invalid R2 S3 Access Key ID or an expired token. Use the Access Key ID from the R2 API token confirmation.';
   if(code==='AccessDenied'||status===403)
     return 'Access denied. Check both R2 S3 keys, Object Read & Write permissions, and bucket scope.';
+  if(code==='InvalidArgument' || status===400) {
+    // Only return a known HTTP/S3 header name, not the SDK message.
+    const detail=String(error?.message||'').toLowerCase();
+    const recognized=[
+      'x-amz-checksum-mode','x-amz-sdk-checksum-algorithm',
+      'x-amz-checksum-algorithm','x-amz-security-token','x-amz-content-sha256'
+    ].find(header=>detail.includes(header));
+    if(recognized)
+      return 'R2 rejected the '+recognized+' request header (HTTP 400). Verify SDK compatibility and use long-term R2 S3 keys, not a general Cloudflare API token.';
+    return 'R2 rejected a request argument (HTTP 400 InvalidArgument). Verify that R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are the S3 credential pair from the same bucket-scoped token, not the API token value. Check the Cloudflare account and bucket.';
+  }
   if(code==='InvalidBucketName'||code==='NoSuchBucket')
     return 'Incorrect R2_BUCKET or account endpoint. The expected bucket is cookiequant-telemetry.';
   if(status===429||code==='SlowDown'||code==='TooManyRequests')

@@ -19,6 +19,9 @@ function client() {
     endpoint:'https://' + process.env.R2_ACCOUNT_ID + '.r2.cloudflarestorage.com',
     credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},
     forcePathStyle:true,
+    // R2 supports a subset of S3 checksum features. Suppress optional SDK checksum headers.
+    requestChecksumCalculation:'WHEN_REQUIRED',
+    responseChecksumValidation:'WHEN_REQUIRED',
     maxAttempts:2
   });
   return cachedClient;

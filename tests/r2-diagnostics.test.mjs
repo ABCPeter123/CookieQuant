@@ -13,16 +13,27 @@ test('R2 diagnostic explains authentication errors without exposing raw messages
   assert.match(explainR2Failure(failure('SignatureDoesNotMatch',403)),/R2_SECRET_ACCESS_KEY/);
   assert.match(explainR2Failure(failure('NoSuchKey',404)),/missing/);
   assert.match(explainR2Failure(failure('SlowDown',429)),/rate-limited/);
+  const argError={...failure('InvalidArgument',400),message:"Unexpected invalid x-amz-checksum-mode value"};
+  const diagnostic=explainR2Failure(argError);
+  assert.match(diagnostic,/x-amz-checksum-mode/);
+  assert.doesNotMatch(diagnostic,/Unexpected invalid/);
+  assert.match(explainR2Failure(failure('InvalidArgument',400)),/S3 credential pair/);
   assert.match(explainR2Failure(new SyntaxError('internal parse error')),/not valid JSON/);
 });
 
 test('read-only cost-guard diagnostics never write objects or print secret values',async()=>{
   const src=await readFile(new URL('../dashboard/scripts/diagnose-r2.mjs',import.meta.url),'utf8');
+  assert.match(src,/ListObjectsV2Command/);
+  assert.match(src,/HeadObjectCommand/);
+  assert.match(src,/requestChecksumCalculation:'WHEN_REQUIRED'/);
+  assert.match(src,/responseChecksumValidation:'WHEN_REQUIRED'/);
   assert.match(src,/GetObjectCommand/);
   assert.match(src,/cookiequant\/v1\/\.budget-guard\.json/);
   assert.match(src,/No R2 objects were modified/);
   assert.doesNotMatch(src,/PutObjectCommand|DeleteObjectCommand|console\.log\(.*R2_SECRET_ACCESS_KEY/);
   const core=await readFile(new URL('../dashboard/lib/r2-storage.js',import.meta.url),'utf8');
   assert.match(core,/explainR2Failure\(error\)/);
+  assert.match(core,/requestChecksumCalculation:'WHEN_REQUIRED'/);
+  assert.match(core,/responseChecksumValidation:'WHEN_REQUIRED'/);
   assert.match(core,/R2 cost guard unreadable/);
 });

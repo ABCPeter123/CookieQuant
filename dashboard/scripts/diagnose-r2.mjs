@@ -4,7 +4,7 @@
  * node --env-file=.env.r2 dashboard/scripts/diagnose-r2.mjs
  * Never prints credentials or fetches full game telemetry.
  */
-import {S3Client,GetObjectCommand} from '@aws-sdk/client-s3';
+import {S3Client,ListObjectsV2Command,HeadObjectCommand,GetObjectCommand} from '@aws-sdk/client-s3';
 import {explainR2Failure} from '../lib/r2-diagnostics.js';
 
 const expected={
@@ -42,15 +42,39 @@ if(invalid){
   console.error('Stopped before contacting R2. Correct .env.r2 and run this read-only diagnostic again.');
   process.exitCode=1;
 }else{
+  for(const [key,typicalLength] of [['R2_ACCESS_KEY_ID',32],['R2_SECRET_ACCESS_KEY',64]]) {
+    const value=process.env[key]||'';
+    if(value.length!==typicalLength)
+      console.log(key+': unusual length for an R2 S3 credential; verify this is not the Cloudflare API token.');
+  }
   const client=new S3Client({
     region:'auto',
     endpoint:'https://'+account+'.r2.cloudflarestorage.com',
     credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},
-    forcePathStyle:true,maxAttempts:2
+    forcePathStyle:true,maxAttempts:2,
+    requestChecksumCalculation:'WHEN_REQUIRED',
+    responseChecksumValidation:'WHEN_REQUIRED'
   });
+  const key='cookiequant/v1/.budget-guard.json';
+  try {
+    const listing=await client.send(new ListObjectsV2Command({Bucket:bucket,Prefix:key,MaxKeys:2}));
+    const exact=(listing.Contents||[]).some(item=>item.Key===key);
+    console.log('BUCKET LIST: READABLE');
+    console.log('BUDGET OBJECT LISTED: '+(exact?'YES':'NO'));
+  } catch (error) {
+    console.log('BUCKET LIST: FAILED');
+    console.log('List reason: '+explainR2Failure(error));
+  }
+  try{
+    await client.send(new HeadObjectCommand({Bucket:bucket,Key:key}));
+    console.log('BUDGET OBJECT METADATA: READABLE');
+  }catch(error){
+    console.log('BUDGET OBJECT METADATA: FAILED');
+    console.log('Metadata reason: '+explainR2Failure(error));
+  }
   try{
     const response=await client.send(new GetObjectCommand({
-      Bucket:bucket,Key:'cookiequant/v1/.budget-guard.json'
+      Bucket:bucket,Key:key
     }));
     const bytes=await response.Body.transformToByteArray();
     const state=JSON.parse(Buffer.from(bytes).toString('utf8'));
