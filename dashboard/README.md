@@ -52,3 +52,7 @@ The monitor classifies data as active (last upload within 150 seconds), delayed 
 ## Object storage backend
 
 The dashboard supports `TELEMETRY_BACKEND=r2` backed by a private Cloudflare R2 bucket. The Vercel function adapter writes compressed minute-resolution hourly indexes, small daily rollups, and periodic full Monte Carlo scenario archives. Every imported Neon snapshot retains its original complete scenarios. The latest simulation remains complete. Public API paths remain unchanged. Until bucket credentials and migration are configured, the default storage backend remains Neon. Instructions: [Cloud telemetry and R2 migration](../docs/CLOUD_TELEMETRY.md#cloudflare-r2-storage-migration-no-neon-at-runtime).
+
+## R2 cost guard
+
+When configured for R2, CookieQuant requires `R2_COST_GUARD=enforced` and an initialized ledger in an otherwise-empty bucket. The adapter conservatively caps cumulative compressed storage growth at 7 GB, Class A operations at 650,000 and Class B at 3,000,000 in any rolling 31-day window. It stops R2 work when limits are reached. This is not a provider-enforced Cloudflare $0 spending cap. Setup and limitations: [R2 cost protection](../docs/CLOUD_TELEMETRY.md#r2-cost-protection-and-hard-stop-limits).

@@ -73,6 +73,7 @@ export default async function handler(req, res) {
       history
     });
   } catch (error) {
+    if (error?.name === 'R2BudgetError') return res.status(507).json({error: 'R2 safety budget stopped reads', reason: error.message});
     console.error('Telemetry history database error', error?.message);
     return res.status(503).json({ error: 'Telemetry history unavailable' });
   }

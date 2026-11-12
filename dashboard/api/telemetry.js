@@ -130,6 +130,7 @@ export default async function handler(req, res) {
     // Append or update the current tick. Stored history has no time-based expiration.
     return send(res, 200, { ok: true, tick: payload.market.tick, receivedAt: new Date().toISOString() });
   } catch (error) {
+    if (error?.name === 'R2BudgetError') return send(res, 507, {error: 'R2 safety budget stopped uploads', reason: error.message});
     console.error('Telemetry ingest database error', error?.message);
     return send(res, 503, { error: 'Telemetry storage unavailable' });
   }

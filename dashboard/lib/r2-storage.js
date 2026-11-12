@@ -1,6 +1,7 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { compactSnapshot, shouldArchiveScenarios } from './archive-policy.js';
+import { applyReservation } from './r2-budget-core.js';
 
 const PREFIX = 'cookiequant/v1';
 const DAY_MS = 86_400_000;
@@ -17,11 +18,64 @@ function client() {
     endpoint:'https://' + process.env.R2_ACCOUNT_ID + '.r2.cloudflarestorage.com',
     credentials:{accessKeyId:process.env.R2_ACCESS_KEY_ID,secretAccessKey:process.env.R2_SECRET_ACCESS_KEY},
     forcePathStyle:true,
-    maxAttempts:3
+    maxAttempts:2
   });
   return cachedClient;
 }
 function objectKey(path) { return PREFIX+'/'+path; }
+const BUDGET_PATH = objectKey('.budget-guard.json');
+let budgetBlockedUntil = 0;
+export class R2BudgetError extends Error {
+  constructor(message){ super(message);this.name='R2BudgetError';this.status=507; }
+}
+function guardRequired() {
+  if (process.env.R2_COST_GUARD !== 'enforced') {
+    throw new R2BudgetError('R2 disabled: R2_COST_GUARD=enforced is required');
+  }
+}
+const budgetPause = ms => new Promise(resolve=>setTimeout(resolve,ms));
+export async function reserveR2Budget(reservation = {}) {
+  guardRequired();
+  if (Date.now() < budgetBlockedUntil) throw new R2BudgetError('R2 circuit breaker active; retry later');
+  if (!configured()) throw new R2BudgetError('R2 credentials not configured');
+  for(let attempt=0;attempt<5;attempt++){
+    let current;
+    try{
+      const response=await client().send(new GetObjectCommand({
+        Bucket:process.env.R2_BUCKET,Key:BUDGET_PATH
+      }));
+      current={
+        value:JSON.parse(Buffer.from(await response.Body.transformToByteArray()).toString('utf8')),
+        etag:response.ETag
+      };
+    }catch(error){
+      if(missing(error))throw new R2BudgetError('R2 disabled: initialize the cost guard on an empty bucket first');
+      if(error?.name==='R2BudgetError')throw error;
+      throw new R2BudgetError('R2 cost guard unreadable: fail closed');
+    }
+    const decision=applyReservation(current.value,reservation,new Date());
+    if(!decision.ok){
+      // Even failed protection checks consume R2 read operations. Avoid
+      // repeatedly querying the bucket while the cap is exhausted.
+      budgetBlockedUntil=Date.now()+60*60_000;
+      throw new R2BudgetError(decision.reason);
+    }
+    try{
+      await client().send(new PutObjectCommand({
+        Bucket:process.env.R2_BUCKET,Key:BUDGET_PATH,
+        IfMatch:current.etag,
+        Body:Buffer.from(JSON.stringify(decision.next)),
+        ContentType:'application/json',CacheControl:'private,no-store'
+      }));
+      return decision.next;
+    }catch(error){
+      if(!collision(error)||attempt===4)
+        throw new R2BudgetError('R2 budget ledger could not be updated: fail closed');
+      await budgetPause(100+attempt*175);
+    }
+  }
+  throw new R2BudgetError('R2 budget unavailable');
+}
 function missing(error) {
   return error?.name === 'NoSuchKey' || error?.name === 'NotFound' ||
     error?.$metadata?.httpStatusCode === 404;
@@ -34,14 +88,18 @@ export async function readJson(path) {
   try {
     const response = await client().send(new GetObjectCommand({Bucket:process.env.R2_BUCKET,Key:objectKey(path)}));
     const bytes=await response.Body.transformToByteArray();
-    return { value:JSON.parse(gunzipSync(bytes).toString('utf8')),etag:response.ETag };
+    return { value:JSON.parse(gunzipSync(bytes).toString('utf8')),etag:response.ETag,size:bytes.length };
   }catch(error){
     if(missing(error))return null;
     throw error;
   }
 }
-export async function writeJson(path,value,etag) {
+export async function writeJson(path,value,etag,oldCompressedBytes=0) {
   const compressed=gzipSync(Buffer.from(JSON.stringify(value)),{level:6});
+  // Positive deltas are deliberately never refunded. Overcounting fails closed
+  // earlier, rather than risking overage when writes race or retries occur.
+  const delta=Math.max(0,compressed.length-Math.max(0,oldCompressedBytes));
+  await reserveR2Budget({bytes:delta});
   const input={
     Bucket:process.env.R2_BUCKET,Key:objectKey(path),Body:compressed,
     ContentType:'application/json',ContentEncoding:'gzip',CacheControl:'private, max-age=0',
@@ -54,12 +112,15 @@ async function editJson(path,merge) {
     const existing=await readJson(path);
     const next=merge(existing?.value||null);
     if (next === null)return null;
-    try{ await writeJson(path,next,existing?.etag||null);return next; }
+    try{ await writeJson(path,next,existing?.etag||null,existing?.size||0);return next; }
     catch(error){if(!collision(error)||i===8)throw error;}
   }
   throw Error('R2 concurrent write retry limit exceeded');
 }
 export async function archiveSnapshot(payload,receivedAt=new Date().toISOString(),options={}) {
+  // Reserve well above the ordinary number of PUTs, GETs and conditional
+  // ledger updates before any user data touches R2.
+  await reserveR2Budget({classA:12,classB:14});
   const timestamp=new Date(receivedAt);
   if(!Number.isFinite(timestamp.getTime()))throw Error('Invalid snapshot timestamp');
   const at=timestamp.toISOString();

@@ -135,6 +135,25 @@ Keep `DATABASE_URL` and `TELEMETRY_WRITE_KEY` encrypted in Vercel project settin
 
 The ingestion service is designed for one owner/game. It is not a multi-user platform. The game publishes roughly once a minute while running, but there is now **no automatic storage cap**. Monitor Neon usage and configure backups or archival exports for long-term recovery. A stolen write key could cause storage abuse until rotated. A later multi-user release should add account-based authentication, write quotas, session identity and an independent device-pairing flow.
 
+## R2 cost protection and hard-stop limits
+
+Cloudflare does **not** supply a zero-dollar spend cutoff for R2. Budget alerts only notify and do not suspend service. A private R2 bucket also has no default storage cap. The following is an **application-level guard**, not a contractual billing guarantee.
+
+**The adapter is fail-closed until explicitly initialized:** An R2 deployment with missing `R2_COST_GUARD=enforced`, missing budget ledger, invalid budget ledger, or exhausted allowances returns HTTP 507 and does not issue data reads or writes. Inactive deployments use Neon as before.
+
+The guard records conservative reservations for each API request and object write in a single, conditionally updated R2 ledger. A rolling 31-day window covers billing periods that cross calendar months. The maximum reservations are:
+
+- **7,000,000,000 bytes** in cumulative positive compressed storage growth. Replacing a larger object with a smaller one does not refund budget. This ceiling is below the R2 Standard 10 GB-month free tier.
+- **650,000 Class A requests per rolling 31 days**, below the free 1,000,000 monthly allowance.
+- **3,000,000 Class B requests per rolling 31 days**, below the free 10,000,000 monthly allowance.
+- Extra request reservations cover conditional-write retries, the ledger updates themselves and operation-count uncertainty. Exhaustion suspends reads and uploads without deleting records.
+
+**Initialize an empty, exclusive bucket before migration.** With the bucket-scoped R2 environment variables available locally, set `R2_COST_GUARD=enforced` and run `npm run init:r2-budget --prefix dashboard`. The initialization script refuses a non-empty bucket. It creates `cookiequant/v1/.budget-guard.json`. Then run the backfill and switch to R2 after verification. Set `R2_COST_GUARD=enforced` as an encrypted Production environment variable on Vercel alongside the bucket credentials. Use Standard storage only. The app refuses to run against R2 without this ledger.
+
+These limits apply **only to R2 operations issued by this CookieQuant adapter**, not direct R2 API access, other buckets, other Cloudflare projects or a compromised access token. A flood of failed guard checks could still consume R2 Class B operations, and Cloudflare may bill for unrelated usage. **No application code can promise an absolute $0 Cloudflare bill.** For the strongest isolation use a dedicated Cloudflare account, an empty private bucket, a bucket-scoped credential, no other usage, Cloudflare usage notifications and a budget alert. Cloudflare budget alerts are not automatic shutdown switches.
+
+When the guard stops uploads, the game continues functioning and retries its telemetry connection. The website may show stale data until usage falls within the rolling operation budgets or the storage budget is manually reviewed. Do not reset the guard ledger or delete it to bypass a limit without independently reviewing the Cloudflare bill.
+
 ## Cloudflare R2 storage migration (No Neon at runtime)
 
 Neon's live telemetry database is a temporary source. R2 is designed for lower-cost long-lived storage. The adapter stores every market observation in compact hourly blocks, while full 256-path simulation arrays are sampled approximately hourly. This deployment includes a **feature-flagged R2 adapter**, but Neon remains the active backend until you create and connect the Cloudflare bucket and copy history. Do not delete the Neon database before verification.
@@ -144,7 +163,7 @@ Neon's live telemetry database is a temporary source. R2 is designed for lower-c
 1. Sign in to [Cloudflare R2](https://dash.cloudflare.com/). Create a bucket named `cookiequant-telemetry` with Standard storage. Keep it private.
 2. Under **R2 → Overview → Manage API Tokens**, create a bucket-scoped **Object Read & Write** token. Record the Cloudflare account ID, Access Key ID, and Secret Access Key in your password manager.
 3. In the **Vercel cookiequant-dashboard** project, configure the following as encrypted **Production** environment variables: `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. Don't paste them in GitHub, browser console, or ChatGPT. The current `DATABASE_URL` remains present during migration.
-4. Keep `TELEMETRY_BACKEND=neon` (or unset) until the migration finishes. The app continues using Neon, so your live feed does not break during setup.
+4. Configure `R2_COST_GUARD=enforced` locally and in Vercel, then run `npm run init:r2-budget --prefix dashboard` against the **new empty bucket** before any migration. Keep `TELEMETRY_BACKEND=neon` (or unset) until the migration finishes. The app continues using Neon, so your live feed does not break during setup.
 5. From the repository root, use `npm install --prefix dashboard`, then `npm run migrate:r2 --prefix dashboard` in a terminal with the same R2 variables and `DATABASE_URL` available **locally** as environment variables. Do not commit local .env files. The script copies existing rows in batches of 50 and reports progress. All original Neon rows retain their full historical simulation paths during migration (the reduced-frequency rule applies only to future uploads). Rerun it to catch any final writes. The deterministic snapshot keys make retries safe. Verify stored objects via Cloudflare's R2 bucket browser.
 6. Set `TELEMETRY_BACKEND=r2` in Vercel's **Production** environment and redeploy. Then check `/api/live`, `/api/history?range=all`, and `/api/health` return the expected snapshots. Confirm the next browser upload succeeds. Only after these checks should you consider removing `DATABASE_URL` or deleting the old Neon project.
 
@@ -157,7 +176,7 @@ Neon's live telemetry database is a temporary source. R2 is designed for lower-c
 
 R2 uses HTTP conditional ETag writes for its shared indexes to reduce races. Full history is not automatically deleted. In long chart ranges, the API samples hourly rollups and a bounded selection of days. That reduces read operations without deleting minute-level history.
 
-The Vercel API still validates the publishing key. R2 credentials stay server-side, not in the public frontend or the userscript. Charts remain public and read-only. The R2 adapter can sample a long historical period without downloading every archived Monte Carlo vector. Historical day indexes are sampled across longer timespans to keep requests bounded. No automatic data deletion is configured.
+The Vercel API still validates the publishing key. R2 credentials stay server-side, not in the public frontend or the userscript. Charts remain public and read-only. The R2 adapter can sample a long historical period without downloading every archived Monte Carlo vector. Historical day indexes are sampled across longer timespans to keep requests bounded. No automatic data deletion is configured. The free-tier circuit breaker can suspend further reads/writes to protect the account. Review the R2 cost protection section above.
 
 ### Estimated usage
 
