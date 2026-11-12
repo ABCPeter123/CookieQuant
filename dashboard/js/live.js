@@ -1,10 +1,13 @@
 import { mountQuantTerminal } from './quant-terminal.js';
+import { mountTelemetryHealth } from './telemetry-health.js';
 /* Cloud telemetry UI. No writer credential or game-control API is bundled here. */
 const CLOUD_ENDPOINT = '/api/live';
+const CLOUD_HEALTH_ENDPOINT = '/api/health';
 const CLOUD_HISTORY_ENDPOINT = '/api/history';
 const HISTORY_RANGES = ['24h', '7d', '30d', '1y', 'all'];
 let quantTerminal;
-const cloud = { latest: null, history: [], timer: null, active: false, historyRange: '24h', historyLoaded: '', historyLastFetched: 0, historyTotal: 0, historyRequest: 0, liveRequest: 0 };
+let healthMonitor;
+const cloud = { latest: null, history: [], timer: null, active: false, historyRange: '24h', historyLoaded: '', historyLastFetched: 0, historyTotal: 0, historyRequest: 0, liveRequest: 0, healthTimer: null, healthRequest: 0 };
 
 const cloudCss = `
 .telemetry-box{margin:0 0 18px;background:#121c1d;border:1px solid #345148;border-radius:5px;overflow:hidden}
@@ -60,6 +63,22 @@ async function fetchLive(showErrors = true) {
     el('light').className='telemetry-light';
   }
 }
+async function fetchHealth() {
+  if (!cloud.active) return;
+  const request = ++cloud.healthRequest;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(CLOUD_HEALTH_ENDPOINT, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) throw Error('HTTP '+response.status);
+    const data = await response.json();
+    if (!cloud.active || request !== cloud.healthRequest) return;
+    healthMonitor?.render(data);
+  } catch(error) {
+    if (cloud.active && request === cloud.healthRequest)
+      healthMonitor?.error('Health API unavailable ('+(error?.message || 'network error')+'). Recent game data may still be available.');
+  } finally { clearTimeout(timeout); }
+}
 async function fetchHistory(showErrors = true) {
   if (!cloud.active) return;
   const range = cloud.historyRange;
@@ -87,7 +106,7 @@ async function fetchHistory(showErrors = true) {
 }
 function showMode(isLive) {
   cloud.active=isLive;
-  if (!isLive) { ++cloud.historyRequest; ++cloud.liveRequest; }
+  if (!isLive) { ++cloud.historyRequest; ++cloud.liveRequest; ++cloud.healthRequest; }
   el('tab-live').classList.toggle('active',isLive);
   el('tab-demo').classList.toggle('active',!isLive);
   const demoNotice=document.querySelector('.notice[role="note"]');
@@ -99,7 +118,13 @@ function showMode(isLive) {
   el('live').classList.toggle('visible',isLive);
   document.querySelectorAll('#market .metric-grid,#market .terminal-grid,#market .analysis-grid').forEach(node=>node.style.display=isLive?'none':'');
   if(cloud.timer){clearInterval(cloud.timer);cloud.timer=null;}
-  if(isLive){void fetchLive();cloud.timer=setInterval(()=>void fetchLive(false),30000);}
+  if(cloud.healthTimer){clearInterval(cloud.healthTimer);cloud.healthTimer=null;}
+  if(isLive){
+    void fetchLive();
+    void fetchHealth();
+    cloud.timer=setInterval(()=>void fetchLive(false),30000);
+    cloud.healthTimer=setInterval(()=>void fetchHealth(),30000);
+  }
   else status('Demo mode · Synthetic market conditions, no live connection');
 }
 function renderLive() {
@@ -139,6 +164,7 @@ export function initCloudTelemetry() {
     </div>
     <div id="cloud-status" class="telemetry-status">Connecting to public game telemetry…</div>
     <div id="cloud-live" class="telemetry-live visible">
+      <div id="cloud-health"></div>
       <div id="cloud-empty" class="telemetry-empty">Waiting for game telemetry. This dashboard needs no access key. Once the game publisher uploads a snapshot, live analysis appears here.</div>
       <div id="cloud-data" hidden>
         <div class="subhead"><strong>Live game telemetry</strong><span id="cloud-date">WAITING FOR FIRST UPLOAD</span></div>
@@ -154,6 +180,7 @@ export function initCloudTelemetry() {
     </details>`;
   metrics.before(element);
   quantTerminal=mountQuantTerminal(el('quant'));
+  healthMonitor=mountTelemetryHealth(el('health'));
   el('ranges').querySelectorAll('button[data-range]').forEach(button=>{
     button.addEventListener('click',()=>{
       const range=button.dataset.range;

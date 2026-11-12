@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.12.1
+// @version      2026.11.12.2
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.1" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.2" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.12.1";
+        const TOOLKIT_VERSION = "2026.11.12.2";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -6307,11 +6307,21 @@
           lastAttemptAt: 0,
           nextAttemptAt: 0,
           consecutiveFailures: 0,
+          totalFailures: 0,
+          attemptCount: 0,
+          recoveryCount: 0,
+          startedAt: Date.now(),
+          lastFailureAt: 0,
+          lastFailureKind: "",
+          lastRecoveryAt: 0,
           get health() {
             return {
               enabled: !!cloudConfig()?.enabled, status: this.status,
               pending: this.pending, lastSent: this.lastSent ? new Date(this.lastSent).toISOString() : null,
               failures: this.consecutiveFailures,
+              failedAttemptsSinceLoad: this.totalFailures,
+              successfulRecoveriesSinceLoad: this.recoveryCount,
+              lastFailureAt: this.lastFailureAt ? new Date(this.lastFailureAt).toISOString() : null,
               nextAttempt: this.nextAttemptAt ? new Date(this.nextAttemptAt).toISOString() : null,
               stale: !!this.lastSent && Date.now() - this.lastSent > CQ_TELEMETRY_STALE_MS
             };
@@ -6372,6 +6382,7 @@
               return false;
             }
             this.pending = true;
+            this.attemptCount++;
             this.lastAttemptAt = now;
             this.nextAttemptAt = now + CQ_TELEMETRY_INTERVAL_MS;
             const controller = new AbortController();
@@ -6403,6 +6414,19 @@
             });
             const snapshot = {
               version: 1, run: settings.run, emittedAt: new Date().toISOString(),
+              delivery: {
+                clientVersion: TOOLKIT_VERSION,
+                startedAt: new Date(this.startedAt).toISOString(),
+                attempts: this.attemptCount,
+                failedAttempts: this.totalFailures,
+                retriesBeforeSuccess: this.consecutiveFailures,
+                recoveries: this.recoveryCount + (this.consecutiveFailures > 0 ? 1 : 0),
+                lastFailureAt: this.lastFailureAt ? new Date(this.lastFailureAt).toISOString() : null,
+                lastFailureKind: this.lastFailureKind,
+                lastRecoveryAt: this.consecutiveFailures > 0
+                  ? new Date().toISOString()
+                  : this.lastRecoveryAt ? new Date(this.lastRecoveryAt).toISOString() : null
+              },
               game: {
                 version: String(Game.version || ""), resets: Number(Game.resets) || 0,
                 cookies: finiteTelemetry(Game.cookies), cps: finiteTelemetry(Game.cookiesPs),
@@ -6441,6 +6465,10 @@
               // Don't report connected if the user disabled publishing during the request.
               if (!toolkit.active || !cloudConfig()?.enabled) return false;
               this.lastSent = Date.now();
+              if (this.consecutiveFailures > 0) {
+                this.recoveryCount++;
+                this.lastRecoveryAt = this.lastSent;
+              }
               this.consecutiveFailures = 0;
               this.nextAttemptAt = this.lastSent + CQ_TELEMETRY_INTERVAL_MS;
               this.status = "Connected. Last upload " + new Date(this.lastSent).toLocaleTimeString() +
@@ -6449,6 +6477,13 @@
             } catch (error) {
               if (!toolkit.active || !cloudConfig()?.enabled) return false;
               this.consecutiveFailures++;
+              this.totalFailures++;
+              this.lastFailureAt = Date.now();
+              this.lastFailureKind = error?.name === "AbortError"
+                ? "timeout"
+                : /^HTTP \d{3}$/.test(error?.message || "")
+                  ? error.message.replace("HTTP ", "http-")
+                  : "network";
               const backoff = Math.min(5 * 60_000, 8_000 * Math.pow(2, Math.min(this.consecutiveFailures - 1, 6)));
               const retry = Math.round(backoff * (0.9 + Math.random() * 0.2));
               this.nextAttemptAt = Date.now() + retry;

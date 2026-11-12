@@ -16,6 +16,9 @@ test('opt-in game publisher exists in shipped runtime',async()=>{
  assert.match(src,/CQ_TELEMETRY_WATCHDOG_MS = 15_000/);
  assert.match(src,/reconnect\(reason = "manual"\)/);
  assert.match(src,/get health\(\)/);
+ assert.match(src,/retriesBeforeSuccess: this\.consecutiveFailures/);
+ assert.match(src,/lastFailureKind: this\.lastFailureKind/);
+ assert.match(src,/recoveryCount\+\+/);
  assert.match(src,/this\.requestController\?\.abort\(\)/);
  assert.match(src,/Math\.pow\(2, Math\.min\(this\.consecutiveFailures - 1, 6\)\)/);
  assert.match(src,/window\.addEventListener\("online", onTelemetryRecovery\)/);
@@ -23,8 +26,8 @@ test('opt-in game publisher exists in shipped runtime',async()=>{
  assert.match(src,/document\.addEventListener\("visibilitychange", onTelemetryVisibility\)/);
  assert.match(src,/toolkit\.telemetry\?\.cleanup\?\.\(\)/);
  assert.ok(user.includes('const CQ_TELEMETRY_KEY'));
- assert.match(user,/cookieClickToolkit\.version === "2026\.11\.12\.1"/);
- assert.ok(user.includes('@version      2026.11.12.1'));
+ assert.match(user,/cookieClickToolkit\.version === "2026\.11\.12\.2"/);
+ assert.ok(user.includes('@version      2026.11.12.2'));
  assert.doesNotMatch(src,/const CQ_BUNDLED_WRITE_KEY\s*=\s*['\"][A-Za-z0-9_-]{32,}/);
  new Script(src);
  new Script(user);
@@ -40,6 +43,9 @@ test('publisher API validates and strips fields',async()=>{
  const api=await read('../dashboard/api/telemetry.js');
  assert.match(api,/TELEMETRY_WRITE_KEY/);
  assert.match(api,/toRecord\(body\)/);
+ assert.match(api,/lastFailureKind:/);
+ assert.match(api,/rawDelivery/);
+ assert.match(api,/safeIso/);
  assert.match(api,/MAX_BODY = 180000/);
  assert.doesNotMatch(api,/DELETE FROM cq_telemetry_snapshots/i);
  assert.doesNotMatch(api,/interval '30 days'/);
@@ -59,6 +65,21 @@ test('public all-time history needs no viewer key and is bounded only in display
  assert.match(terminal,/ALL TIME/);
  assert.match(client,/fetchHistory/);
  assert.match(client,/CLOUD_HISTORY_ENDPOINT/);
+});
+test('public health endpoint provides a timestamp summary but no private write actions',async()=>{
+ const health=await read('../dashboard/api/health.js');
+ const client=await read('../dashboard/js/live.js');
+ const widget=await read('../dashboard/js/telemetry-health.js');
+ const html=await read('../dashboard/index.html');
+ assert.match(health,/cq_telemetry_snapshots/);
+ assert.match(health,/req.method!=='GET'/);
+ assert.doesNotMatch(health,/TELEMETRY_WRITE_KEY|Authorization/);
+ assert.match(client,/fetchHealth\(\)/);
+ assert.match(client,/cloud-health/);
+ assert.match(client,/healthMonitor=mountTelemetryHealth/);
+ assert.match(widget,/last successful publisher update/i);
+ assert.match(widget,/cannot receive new diagnostics until the connection recovers/);
+ assert.match(html,/health\.css/);
 });
 test('dashboard defaults to live, keeps demo separate and never prompts for a viewer key',async()=>{
  const src=await read('../dashboard/js/live.js');

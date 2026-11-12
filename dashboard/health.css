@@ -1,0 +1,39 @@
+
+/* Telemetry health, matched to the cross-asset research terminal. */
+.health-terminal{margin:0 0 18px;background:#101a21;border:1px solid #2a3942;border-radius:5px;overflow:hidden;font-family:'IBM Plex Mono',monospace}
+.health-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;padding:19px 21px;border-bottom:1px solid #293941}
+.health-kicker{font-size:9px;letter-spacing:.15em;color:#84bfa4;font-weight:600}
+.health-head h4{font:600 19px 'Space Grotesk',sans-serif;letter-spacing:-.03em;margin:6px 0 4px;color:#e9f3ef}
+.health-head p{margin:0;color:#8ea5a7;font:10px/1.6 'IBM Plex Mono',monospace}
+.health-status{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:3px;border:1px solid #33464c;background:#16232a;color:#a8b7bd;white-space:nowrap}
+.health-status strong{font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.045em}
+.health-status #health-dot{display:block;width:8px;height:8px;background:#81939b;border-radius:50%}
+.health-status.active{background:#142922;color:#b7f4ba;border-color:#315c46}
+.health-status.active #health-dot{background:#b7f4ba;box-shadow:0 0 8px #b7f4ba77}
+.health-status.delayed{background:#30251a;color:#ffcd93;border-color:#67513a}
+.health-status.delayed #health-dot{background:#ffbb73}
+.health-status.offline{background:#2a2024;color:#ffc1b9;border-color:#593941}
+.health-status.offline #health-dot{background:#ef928f}
+.health-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-bottom:1px solid #293941}
+.health-metrics>div{padding:18px 19px;min-width:0;border-right:1px solid #293941}
+.health-metrics>div:last-child{border-right:0}
+.health-metrics span{display:block;color:#8ca9a9;font:9px/1.4 'IBM Plex Mono',monospace;letter-spacing:.04em}
+.health-metrics strong{display:block;color:#e6f2e9;font:650 23px/1.1 'Space Grotesk',sans-serif;letter-spacing:-.03em;margin:10px 0 7px;font-variant-numeric:tabular-nums}
+.health-metrics small{color:#7e959a;font:9px/1.45 'IBM Plex Mono',monospace}
+.health-activity{padding:17px 21px 14px}
+.health-activity-head,.health-axis{display:flex;justify-content:space-between;gap:12px;color:#8fa8a5;font:10px 'IBM Plex Mono',monospace;letter-spacing:.045em}
+.health-activity-head span:last-child{color:#c0d8ca;letter-spacing:0}
+.health-bars{display:grid;grid-template-columns:repeat(60,minmax(0,1fr));gap:3px;align-items:end;height:38px;margin-top:13px;padding:3px 0}
+.health-bar{display:block;min-width:0;height:19%;background:#314047;border:1px solid #40515a;border-radius:2px 2px 0 0;transition:height .2s,background .2s}
+.health-bar.seen{height:100%;background:#7ccda6;border-color:#99e0bc}
+.health-bar.latest.seen{background:#c1f9bd;border-color:#d7ffd2}
+.health-axis{margin-top:9px;font-size:9px;color:#748e91}
+.health-foot{border-top:1px solid #2a3942;background:#111b22;padding:12px 21px;display:flex;justify-content:space-between;gap:10px 26px;flex-wrap:wrap;color:#9fb3b4;font:10px/1.5 'IBM Plex Mono',monospace}
+.health-foot span:last-child{color:#789e91}
+.health-details{border-top:1px solid #283941;padding:0 21px 14px}
+.health-details summary{cursor:pointer;padding:14px 0 4px;font:600 10px 'IBM Plex Mono',monospace;color:#b7f4ba}
+.health-details p{color:#809ba0;font:10px/1.55 'IBM Plex Mono',monospace;margin:10px 0 0}
+.health-detail-row{display:flex;justify-content:space-between;gap:15px;padding:9px 0;border-bottom:1px solid #283941;color:#91aaae;font:10px/1.5 'IBM Plex Mono',monospace}
+.health-detail-row strong{color:#d5e5db;text-align:right;overflow-wrap:anywhere;font-weight:600}
+@media(max-width:950px){.health-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.health-metrics>div:nth-child(2){border-right:0}.health-metrics>div:nth-child(-n+2){border-bottom:1px solid #293941}}
+@media(max-width:580px){.health-head{padding:15px 13px}.health-metrics>div{padding:13px}.health-metrics strong{font-size:20px}.health-activity{padding:14px 12px}.health-foot{padding:12px}.health-details{padding:0 12px 14px}.health-bars{gap:2px}.health-activity-head{font-size:9px;flex-wrap:wrap}}

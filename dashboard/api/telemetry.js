@@ -58,8 +58,25 @@ function toRecord(value) {
   if (goods.some(g => !g)) return null;
   const moduleInfo = value.modules || {};
   const stats = value.stats || {};
+  const rawDelivery = value.delivery && typeof value.delivery === 'object' && !Array.isArray(value.delivery)
+    ? value.delivery : {};
+  const safeIso = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)
+    && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : null;
+  const delivery = {
+    clientVersion: text(rawDelivery.clientVersion, 32),
+    startedAt: safeIso(rawDelivery.startedAt),
+    attempts: finite(rawDelivery.attempts, 0, 1e9),
+    failedAttempts: finite(rawDelivery.failedAttempts, 0, 1e9),
+    retriesBeforeSuccess: finite(rawDelivery.retriesBeforeSuccess, 0, 1e6),
+    recoveries: finite(rawDelivery.recoveries, 0, 1e9),
+    lastFailureAt: safeIso(rawDelivery.lastFailureAt),
+    lastFailureKind: /^(timeout|network|http-\d{3})$/.test(rawDelivery.lastFailureKind || '')
+      ? rawDelivery.lastFailureKind : '',
+    lastRecoveryAt: safeIso(rawDelivery.lastRecoveryAt)
+  };
   return {
     version: 1, run: value.run, emittedAt: text(value.emittedAt, 40),
+    delivery,
     game: { version: text(value.game?.version, 30), resets: finite(value.game?.resets, 0, 1e7), cookies: finite(value.game?.cookies), cps: finite(value.game?.cps), prestige: finite(value.game?.prestige) },
     market: {
       tick: market.tick, level: finite(market.level, 0, 100), brokers: finite(market.brokers, 0, 1e5),

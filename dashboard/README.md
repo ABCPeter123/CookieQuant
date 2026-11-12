@@ -42,3 +42,9 @@ In the public **LIVE GAME** mode (the default, without a viewer key), the market
 The quantitative forecast surface displays each stock's expected terminal return and modeled 5th to 95th percentile interval from the **256 real shared-shock Monte Carlo terminal scenarios** uploaded by the CookieQuant userscript. A per-stock histogram, fee-aware chance of profit, conditional worst-5% terminal return, terminal volatility, position targets and cross-asset correlation diagnostics provide detailed analysis.
 
 The projected terminal outcomes are model scenarios, not observed prices, future timestamps, or guaranteed returns. The dashboard does not manufacture intermediate forecast paths. All real quote history remains in the Neon database without application-side expiry.
+
+## Telemetry health monitoring
+
+The default LIVE GAME view has a public, read-only telemetry health monitor. It reports the latest server-received upload, recorded snapshot minutes over the last hour, 24-hour snapshot volume, and detailed recovery statistics reported by the game publisher when available. Data arrives from `/api/health` with 30-second polling.
+
+The monitor classifies data as active (last upload within 150 seconds), delayed (150–600 seconds), or no recent data (over 600 seconds). This is not a guarantee that a device is online or that the browser is running, because uploads stop when a tab sleeps or closes. Failed requests are only visible in the game itself until it reconnects and uploads the next snapshot. The server API and website do not contain the publisher write credential or issue commands to the game.

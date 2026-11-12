@@ -50,6 +50,17 @@ To send a fresh snapshot manually:
 window.cookieClickToolkit.telemetry.push()
 ```
 
+### Public website telemetry health
+
+The live dashboard includes a **Telemetry health** panel above the trading charts. It uses public read-only `/api/health` to show:
+
+- Feed freshness from the most recent server-received snapshot: **FEED ACTIVE** (within 150 seconds), **DELAYED** (150 to 600 seconds), or **NO RECENT DATA** (over 600 seconds).
+- Last successful snapshot timestamp, number of observed snapshot minutes in the last 60 minutes, recent-ingest timeline, and stored snapshot count in the last 24 hours.
+- With the updated publisher (v2026.11.12.2 or later), the version, count of failed attempts, number of recoveries, and the last reported failure and recovery timestamps under **Recovery details**.
+- The website refreshes health every 30 seconds and ages the display every 5 seconds, even when there are no new uploads.
+
+The health panel reports **server observations**, not proof that the browser tab is open. Because a failed publisher cannot send diagnostics, its **current retry countdown and errors remain unknown until the next successful upload**. Recent gaps can also occur when the game is closed or asleep. The browser script retries independently; the website cannot remotely restart it.
+
 ### Automatic recovery
 
 - A 12-second request timeout detects stalled uploads.
@@ -60,6 +71,8 @@ window.cookieClickToolkit.telemetry.push()
 - Use `window.cookieClickToolkit.telemetry.health` in the game console to inspect last successful upload, retry time, error count, and whether the connection is stale. To force a new attempt: `window.cookieClickToolkit.telemetry.reconnect()`.
 
 Network failures, sleeping tabs, and lost connectivity can still leave gaps in time-series capture. The dashboard shows the last-seen timestamp and identifies stale data. The game continues working if the telemetry service is unavailable.
+
+The publisher adds only sanitized, non-secret delivery diagnostics to new snapshots. Previous records without the diagnostics remain valid. The public website can read these summaries, so they should not contain private credentials.
 
 ## Security
 
