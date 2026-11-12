@@ -27,7 +27,6 @@ jobs:
           node --check dashboard/js/model.js
           node --check dashboard/api/history.js
           node --check dashboard/lib/r2-storage.js
-          node --check dashboard/api/maintenance-r2.js
           node --check dashboard/lib/r2-budget-core.js
           node --check dashboard/scripts/init-r2-budget.mjs
           node --check dashboard/scripts/migrate-neon-r2.mjs
