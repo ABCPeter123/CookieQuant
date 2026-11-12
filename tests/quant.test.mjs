@@ -15,7 +15,7 @@ test('terminal forecast uses actual joint scenarios and fee-aware profit thresho
   const result=forecastMetrics({id:1,symbol:'CHC',name:'Chocolate',price:10,stock:3,target:5,buy:true,paths,mean:11.75},.1);
   assert.equal(result.count,8);
   assert.equal(result.mean,94/8);
-  assert.equal(result.edgePct,17.5);
+  assert.ok(Math.abs(result.edgePct-17.5)<1e-10);
   assert.equal(result.pProfit,4/8);
   assert.ok(result.q05 < result.median);
   assert.ok(result.median < result.q95);

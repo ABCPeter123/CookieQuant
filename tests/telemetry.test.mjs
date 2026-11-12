@@ -44,7 +44,8 @@ test('all-time history is authenticated and bounded only in display sampling',as
  assert.match(api,/row_number\(\) OVER/);
  assert.doesNotMatch(api,/DELETE FROM/);
  const client=await read('../dashboard/js/live.js');
- assert.match(client,/data-range="all"/);
+ const terminal=await read('../dashboard/js/quant-terminal.js');
+ assert.match(terminal,/ALL TIME/);
  assert.match(client,/fetchHistory/);
  assert.match(client,/CLOUD_HISTORY_ENDPOINT/);
 });
