@@ -119,7 +119,7 @@ export async function writeJson(path,value,etag,oldCompressedBytes=0) {
   };
   return client().send(new PutObjectCommand(input));
 }
-async function editJson(path,merge) {
+export async function editJson(path,merge) {
   for(let i=0;i<9;i++){
     const existing=await readJson(path);
     const next=merge(existing?.value||null);
