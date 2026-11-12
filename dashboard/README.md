@@ -48,3 +48,7 @@ The projected terminal outcomes are model scenarios, not observed prices, future
 The default LIVE GAME view has a public, read-only telemetry health monitor. It reports the latest server-received upload, recorded snapshot minutes over the last hour, 24-hour snapshot volume, and detailed recovery statistics reported by the game publisher when available. Data arrives from `/api/health` with 30-second polling.
 
 The monitor classifies data as active (last upload within 150 seconds), delayed (150–600 seconds), or no recent data (over 600 seconds). This is not a guarantee that a device is online or that the browser is running, because uploads stop when a tab sleeps or closes. Failed requests are only visible in the game itself until it reconnects and uploads the next snapshot. The server API and website do not contain the publisher write credential or issue commands to the game.
+
+## Object storage backend
+
+The dashboard supports `TELEMETRY_BACKEND=r2` backed by a private Cloudflare R2 bucket. The Vercel function adapter writes compressed immutable snapshots and rolling daily price indexes, preserving the same public API interface. Until bucket credentials and migration are configured, the default storage backend remains Neon. Instructions: [Cloud telemetry and R2 migration](../docs/CLOUD_TELEMETRY.md#cloudflare-r2-storage-migration-no-neon-at-runtime).

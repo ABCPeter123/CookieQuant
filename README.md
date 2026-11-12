@@ -22,6 +22,8 @@ The live dashboard also displays a **telemetry health monitor** showing upload f
 
 Live mode now provides a **cross-asset quantitative terminal**: 18 synchronized stock traces, P05–P95 Monte Carlo forecast intervals for every product, scenario histograms, execution/portfolio positioning and a joint-shock correlation matrix.
 
+The repository now includes a **Cloudflare R2 storage adapter** and a Neon-to-R2 migration script. This is a staged migration: Neon stays active until the private R2 bucket is configured and previous snapshots are copied and verified. Once `TELEMETRY_BACKEND=r2` is set in Vercel, live telemetry and history operate without querying Neon. See [R2 migration instructions](docs/CLOUD_TELEMETRY.md#cloudflare-r2-storage-migration-no-neon-at-runtime).
+
 Raw snapshots are now retained **indefinitely without application-level deletion**. The public live dashboard offers 24H, 7D, 30D, 1Y, and ALL TIME price-history views. Long ranges are downsampled for charts, but the underlying records remain in Neon.
 
 The dashboard opens in **LIVE GAME** mode without a viewer key or sign-in. **Anyone with the URL can view your published game data and its history.** Demo stays separate. Game publishing requires a secret write credential. You can either install a **private personalized userscript** containing the key (generated outside GitHub) or configure the public userscript once using `cookieClickToolkit.telemetry.connect("YOUR_PRIVATE_WRITE_KEY")`. Both reconnect automatically after network errors, browser sleep, and page reloads. Never commit your personal script or write key. See the [cloud telemetry setup and recovery guide](docs/CLOUD_TELEMETRY.md).

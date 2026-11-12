@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { archiveSnapshot } from '../lib/r2-storage.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 const CORS_ORIGINS = new Set(['https://orteil.dashnet.org', 'http://orteil.dashnet.org', 'https://cookiequant-dashboard.vercel.app']);
@@ -104,7 +105,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
   if (!authorize(req, process.env.TELEMETRY_WRITE_KEY)) return send(res, 401, { error: 'Invalid ingestion key' });
-  if (!process.env.DATABASE_URL) return send(res, 503, { error: 'Storage unavailable' });
+  if (process.env.TELEMETRY_BACKEND !== 'r2' && !process.env.DATABASE_URL) return send(res, 503, { error: 'Storage unavailable' });
   const size = Number(req.headers['content-length']);
   if (size > MAX_BODY) return send(res, 413, { error: 'Payload too large' });
   let body = req.body;
@@ -115,8 +116,12 @@ export default async function handler(req, res) {
   if (JSON.stringify(body || {}).length > MAX_BODY) return send(res, 413, { error: 'Payload too large' });
   const payload = toRecord(body);
   if (!payload) return send(res, 400, { error: 'Invalid telemetry schema' });
-  const sql = neon(process.env.DATABASE_URL);
   try {
+    if (process.env.TELEMETRY_BACKEND === 'r2') {
+      const result = await archiveSnapshot(payload);
+      return send(res, 200, { ok: true, tick: payload.market.tick, receivedAt: result.receivedAt, backend: 'r2' });
+    }
+    const sql = neon(process.env.DATABASE_URL);
     const record = JSON.stringify(payload);
     await sql`INSERT INTO cq_telemetry_snapshots (game_run, tick, payload)
       VALUES (${payload.run}, ${payload.market.tick}, ${record}::jsonb)

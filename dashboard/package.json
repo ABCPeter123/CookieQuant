@@ -6,12 +6,14 @@
   "description": "Static research dashboard for CookieQuant algorithms",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test ../tests/dashboard.test.mjs"
+    "test": "node --test ../tests/dashboard.test.mjs",
+    "migrate:r2": "node scripts/migrate-neon-r2.mjs"
   },
   "engines": {
     "node": ">=22"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.0"
+    "@neondatabase/serverless": "^1.0.0",
+    "@aws-sdk/client-s3": "^3.800.0"
   }
 }

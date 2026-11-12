@@ -134,3 +134,28 @@ Keep `DATABASE_URL` and `TELEMETRY_WRITE_KEY` encrypted in Vercel project settin
 ## Limits
 
 The ingestion service is designed for one owner/game. It is not a multi-user platform. The game publishes roughly once a minute while running, but there is now **no automatic storage cap**. Monitor Neon usage and configure backups or archival exports for long-term recovery. A stolen write key could cause storage abuse until rotated. A later multi-user release should add account-based authentication, write quotas, session identity and an independent device-pairing flow.
+
+## Cloudflare R2 storage migration (No Neon at runtime)
+
+Neon's live telemetry database is a temporary source. R2 is designed for lower-cost long-lived storage. This deployment includes a **feature-flagged R2 adapter**, but Neon remains the active backend until you create and connect the Cloudflare bucket and copy history. Do not delete the Neon database before verification.
+
+### Cloudflare setup
+
+1. Sign in to [Cloudflare R2](https://dash.cloudflare.com/). Create a bucket named `cookiequant-telemetry` with Standard storage. Keep it private.
+2. Under **R2 → Overview → Manage API Tokens**, create a bucket-scoped **Object Read & Write** token. Record the Cloudflare account ID, Access Key ID, and Secret Access Key in your password manager.
+3. In the **Vercel cookiequant-dashboard** project, configure the following as encrypted **Production** environment variables: `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, and `R2_SECRET_ACCESS_KEY`. Don't paste them in GitHub, browser console, or ChatGPT. The current `DATABASE_URL` remains present during migration.
+4. Keep `TELEMETRY_BACKEND=neon` (or unset) until the migration finishes. The app continues using Neon, so your live feed does not break during setup.
+5. From the repository root, use `npm install --prefix dashboard`, then `npm run migrate:r2 --prefix dashboard` in a terminal with the same R2 variables and `DATABASE_URL` available **locally** as environment variables. Do not commit local .env files. The script copies existing rows in batches of 50 and reports progress. Rerun it to catch any final writes. The deterministic snapshot keys make retries safe. Verify stored objects via Cloudflare's R2 bucket browser.
+6. Set `TELEMETRY_BACKEND=r2` in Vercel's **Production** environment and redeploy. Then check `/api/live`, `/api/history?range=all`, and `/api/health` return the expected snapshots. Confirm the next browser upload succeeds. Only after these checks should you consider removing `DATABASE_URL` or deleting the old Neon project.
+
+### R2 data layout
+
+- `cookiequant/v1/snapshots/YYYY-MM-DD/<run>-<tick>.json.gz`: compressed full raw snapshot per game run/tick/day. These preserve the Monte Carlo vectors for later backtesting.
+- `cookiequant/v1/daily/YYYY-MM-DD.json.gz`: compressed market price index for charting. Atomically updated with an ETag check to protect against overlapping writes.
+- `cookiequant/v1/latest.json.gz`: most recent snapshot, a 120-row recent history cache, the first date and an approximate record count.
+
+The Vercel API still validates the publishing key. R2 credentials stay server-side, not in the public frontend or the userscript. Charts remain public and read-only. The R2 adapter can sample a long historical period without downloading every archived Monte Carlo vector. Historical day indexes are sampled across longer timespans to keep requests bounded. No automatic data deletion is configured.
+
+### Estimated usage
+
+The original Neon payload averaged about **30 KB per snapshot**, roughly 16 GB per year at a steady one-minute cadence before compression. R2 stores these compressed, plus small daily summary files. Cloudflare's current free tier includes 10 GB-month of Standard storage and 1 million Class A operations monthly. Storage beyond the free tier is billed, so indefinite retention is not equivalent to unlimited free storage. Keep independent backups if the history is valuable.

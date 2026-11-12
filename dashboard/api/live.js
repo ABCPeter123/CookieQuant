@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { latestSnapshot } from '../lib/r2-storage.js';
 
 const ORIGIN = 'https://cookiequant-dashboard.vercel.app';
 export default async function handler(req, res) {
@@ -9,9 +10,18 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Storage unavailable' });
-  const sql = neon(process.env.DATABASE_URL);
+  if (process.env.TELEMETRY_BACKEND !== 'r2' && !process.env.DATABASE_URL) return res.status(503).json({ error: 'Storage unavailable' });
   try {
+    if (process.env.TELEMETRY_BACKEND === 'r2') {
+      const state = await latestSnapshot();
+      return res.status(200).json({
+        connected: Boolean(state),
+        latest: state ? {...state.payload, receivedAt: state.receivedAt} : null,
+        history: state?.history||[],
+        serverTime: new Date().toISOString()
+      });
+    }
+    const sql = neon(process.env.DATABASE_URL);
     const rows = await sql`SELECT received_at, tick, payload
       FROM cq_telemetry_snapshots
       ORDER BY received_at DESC LIMIT 120`;

@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless';
+import { latestSnapshot, readDays, downsample, rangeStart } from '../lib/r2-storage.js';
 
 const DASHBOARD_ORIGIN = 'https://cookiequant-dashboard.vercel.app';
 const RANGES = Object.freeze({ '24h': 1, '7d': 7, '30d': 30, '1y': 365, all: 0 });
@@ -11,12 +12,28 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!process.env.DATABASE_URL) return res.status(503).json({ error: 'Storage unavailable' });
+  if (process.env.TELEMETRY_BACKEND !== 'r2' && !process.env.DATABASE_URL) return res.status(503).json({ error: 'Storage unavailable' });
   const range = typeof req.query?.range === 'string' ? req.query.range : '24h';
   if (!Object.hasOwn(RANGES, range)) return res.status(400).json({ error: 'Invalid history range' });
   const days = RANGES[range];
-  const sql = neon(process.env.DATABASE_URL);
   try {
+    if (process.env.TELEMETRY_BACKEND === 'r2') {
+      const state = await latestSnapshot();
+      if (!state) return res.status(200).json({range,sampled:0,total:0,firstAt:null,lastAt:null,history:[]});
+      const begin=rangeStart(state.receivedAt,range,state.firstAt);
+      const rows=(await readDays(begin,state.receivedAt)).filter(item=>
+        Date.parse(item.receivedAt)>=Date.parse(begin) &&
+        Date.parse(item.receivedAt)<=Date.parse(state.receivedAt));
+      const sampled=downsample(rows,SAMPLES);
+      return res.status(200).json({
+        range, sampled:sampled.length,
+        total:range==='all' ? Math.max(state.total||0,rows.length) : rows.length,
+        firstAt:range==='all' ? state.firstAt : (rows[0]?.receivedAt||null),
+        lastAt:state.receivedAt,
+        history:sampled.map(row=>({receivedAt:row.receivedAt,tick:row.tick,market:{goods:row.market.goods}}))
+      });
+    }
+    const sql = neon(process.env.DATABASE_URL);
     // Sample price points for display without deleting or truncating historical records.
     const rows = await sql`
       WITH ranked AS (
