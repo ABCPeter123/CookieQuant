@@ -73,7 +73,13 @@ function toRecord(value) {
     lastFailureAt: safeIso(rawDelivery.lastFailureAt),
     lastFailureKind: /^(timeout|network|http-\d{3})$/.test(rawDelivery.lastFailureKind || '')
       ? rawDelivery.lastFailureKind : '',
-    lastRecoveryAt: safeIso(rawDelivery.lastRecoveryAt)
+    lastRecoveryAt: safeIso(rawDelivery.lastRecoveryAt),
+    // Publisher-side scheduling evidence. Values arrive only with successful
+    // snapshots and do not claim current browser availability.
+    schedulerLagMs: finite(rawDelivery.schedulerLagMs, 0, 86_400_000),
+    schedulerSource: /^(timer|worker|game-loop|manual|startup)$/.test(rawDelivery.schedulerSource||'')
+      ? rawDelivery.schedulerSource : '',
+    tabHiddenAtAttempt: rawDelivery.tabHiddenAtAttempt === true
   };
   return {
     version: 1, run: value.run, emittedAt: text(value.emittedAt, 40),

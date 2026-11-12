@@ -28,6 +28,9 @@ test('minute activity distinguishes observed snapshots from connection uptime',(
   assert.equal(data.ageSeconds,35);
   assert.equal(data.minutes.length,HEALTH_WINDOW_MINUTES);
   assert.equal(data.recordedMinutesLastHour,2);
+  assert.equal(data.cadence.recentWindowMinutes,10);
+  assert.equal(data.cadence.recentRecordedMinutes,2);
+  assert.equal(data.cadence.status,'gaps');
   assert.equal(data.snapshotsLastHour,4);
   assert.equal(data.snapshotsLast24Hours,127);
   assert.equal(data.publisher,null);
@@ -50,4 +53,28 @@ test('delivery statistics are reported only when available, never synthesized',(
   assert.equal(missing.lastReceivedAt,null);
   assert.equal(missing.ageSeconds,null);
   assert.equal(missing.publisher,null);
+});
+
+test('ten completed minutes report accurate cadence without assuming browser uptime',()=>{
+  const start=Date.parse('2026-11-12T13:50:00Z');
+  const minuteRows=Array.from({length:10},(_,i)=>({
+    minute:new Date(start+i*60_000).toISOString(),samples:1
+  }));
+  const healthy=buildHealthView({
+    now:'2026-11-12T14:00:35Z',
+    latestAt:'2026-11-12T13:59:55Z',minuteRows
+  });
+  assert.equal(healthy.cadence.status,'on-target');
+  assert.equal(healthy.cadence.recentRecordedMinutes,10);
+  assert.equal(healthy.cadence.recentMissedMinutes,0);
+  assert.equal(healthy.cadence.targetIntervalSeconds,60);
+  const sparse=buildHealthView({
+    now:'2026-11-12T14:00:35Z',
+    latestAt:'2026-11-12T13:59:55Z',
+    minuteRows:[minuteRows[0],minuteRows[9]]
+  });
+  assert.equal(sparse.status,'live');
+  assert.equal(sparse.cadence.status,'gaps');
+  assert.equal(sparse.cadence.recentRecordedMinutes,2);
+  assert.equal(sparse.cadence.recentMissedMinutes,8);
 });

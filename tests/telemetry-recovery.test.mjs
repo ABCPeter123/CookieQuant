@@ -45,10 +45,10 @@ test('cloud publisher retries after failure, detects staleness and recovers afte
     setInterval: (fn, ms) => { timers.set(ms, fn); return ms; },
     clearInterval: ms => timers.delete(ms),
     setTimeout: (fn, ms) => ms, clearTimeout: () => {},
-    AbortController, Date, Math, TOOLKIT_VERSION: '2026.11.12.2', console: { warn() {}, error() {} }
+    AbortController, Date, Math, TOOLKIT_VERSION: '2026.11.12.3', console: { warn() {}, error() {} }
   });
   const settle = () => new Promise(resolve => setImmediate(resolve));
-  assert.ok(timers.has(15000), '15-second watchdog installed');
+  assert.ok(timers.has(8000), '8-second watchdog installed');
   assert.ok(events.has('online') && events.has('focus') && events.has('pageshow'));
   assert.ok(events.has('visibilitychange'));
   toolkit.telemetry.connect('x'.repeat(48));
@@ -57,13 +57,20 @@ test('cloud publisher retries after failure, detects staleness and recovers afte
   assert.equal(toolkit.telemetry.consecutiveFailures, 1);
   assert.match(toolkit.telemetry.status, /Disconnected/);
   assert.ok(toolkit.telemetry.nextAttemptAt > Date.now());
-  timers.get(15000)();
+  timers.get(8000)();
   await settle();
   assert.equal(requests, 1, 'watchdog respects backoff');
   assert.equal(await toolkit.telemetry.push(true), true);
   assert.equal(requests, 2);
   assert.equal(toolkit.telemetry.consecutiveFailures, 0);
   assert.ok(toolkit.telemetry.lastSent > 0);
+  assert.equal(toolkit.telemetry.schedulerSource,'manual');
+  assert.ok(toolkit.telemetry.nextAttemptAt <= toolkit.telemetry.lastAttemptAt + 60_000 + 25_000,
+    'successful uploads no longer add a full minute after network latency');
+  const noDuplicate=requests;
+  timers.get(8000)();
+  await settle();
+  assert.equal(requests,noDuplicate,'parallel watchdog sources do not duplicate the same upload');
   toolkit.telemetry.lastSent = Date.now() - 160000;
   toolkit.telemetry.lastAttemptAt = 0;
   toolkit.telemetry.checkHealth();
@@ -76,7 +83,7 @@ test('cloud publisher retries after failure, detects staleness and recovers afte
   assert.equal(requests, 4, 'network recovery triggers immediate upload');
   toolkit.telemetry.disconnect();
   const count = requests;
-  timers.get(15000)();
+  timers.get(8000)();
   await settle();
   assert.equal(requests, count, 'disabled publisher does not reconnect');
   toolkit.telemetry.cleanup();

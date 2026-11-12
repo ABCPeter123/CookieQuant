@@ -13,7 +13,12 @@ test('opt-in game publisher exists in shipped runtime',async()=>{
  assert.match(src,/const cloudConfig/);
  assert.match(src,/toolkit\.telemetryStock/);
  assert.match(src,/clearInterval\(toolkit\.telemetryTimer\)/);
- assert.match(src,/CQ_TELEMETRY_WATCHDOG_MS = 15_000/);
+ assert.match(src,/CQ_TELEMETRY_WATCHDOG_MS = 8_000/);
+ assert.match(src,/CQ_TELEMETRY_WORKER_PULSE_MS = 8_000/);
+ assert.match(src,/toolkit\.telemetryWorker\.onmessage/);
+ assert.match(src,/Game\.registerHook\("logic"/);
+ assert.match(src,/schedulerLagMs: this\.schedulerLagMs/);
+ assert.match(src,/this\.lastAttemptAt \+ CQ_TELEMETRY_INTERVAL_MS/);
  assert.match(src,/reconnect\(reason = "manual"\)/);
  assert.match(src,/get health\(\)/);
  assert.match(src,/retriesBeforeSuccess: this\.consecutiveFailures/);
@@ -27,7 +32,7 @@ test('opt-in game publisher exists in shipped runtime',async()=>{
  assert.match(src,/toolkit\.telemetry\?\.cleanup\?\.\(\)/);
  assert.ok(user.includes('const CQ_TELEMETRY_KEY'));
  assert.match(user,/cookieClickToolkit\.version === "2026\.11\.12\.2"/);
- assert.ok(user.includes('@version      2026.11.12.2'));
+ assert.ok(user.includes('@version      2026.11.12.3'));
  assert.doesNotMatch(src,/const CQ_BUNDLED_WRITE_KEY\s*=\s*['\"][A-Za-z0-9_-]{32,}/);
  new Script(src);
  new Script(user);

@@ -23,7 +23,7 @@ export function mountTelemetryHealth(root) {
   root.className='health-terminal';
   root.innerHTML=[
     '<div class="health-head"><div><div class="health-kicker">DATA PIPELINE / INGEST MONITOR</div>',
-    '<h4>Telemetry health</h4><p>Server-observed publisher activity. Updated every 30 seconds.</p></div>',
+    '<h4>Telemetry health</h4><p>Server-observed publisher activity, refreshed every 30 seconds. Target: one game snapshot per minute while the browser is running.</p></div>',
     '<div id="health-status" class="health-status waiting"><span id="health-dot" aria-hidden="true"></span><strong id="health-state">CHECKING</strong></div></div>',
     '<div class="health-metrics">',
       '<div><span>LAST RECEIVED</span><strong id="health-age">...</strong><small id="health-time">Waiting for server response</small></div>',
@@ -56,7 +56,13 @@ export function mountTelemetryHealth(root) {
     field('status').className='health-status '+css;
     field('state').textContent=label;
     field('age').textContent=formatAge(age);
-    field('reason').textContent=description;
+    const cadence=data.cadence;
+    if(css==='active' && cadence?.status==='gaps') {
+      field('status').className='health-status delayed';
+      field('state').textContent='LIVE · GAPS';
+      field('reason').textContent='Last upload is recent, but only '+numeric(cadence.recentRecordedMinutes)+
+        ' / '+numeric(cadence.recentWindowMinutes)+' completed minutes had snapshots. The game tab or its timers may be paused.';
+    } else field('reason').textContent=description;
   }
   function render(data){
     if(!data || !Array.isArray(data.minutes))throw Error('Invalid telemetry health response');
@@ -66,7 +72,10 @@ export function mountTelemetryHealth(root) {
     field('time').textContent=data.lastReceivedAt?readableDate(data.lastReceivedAt):'No recorded upload';
     field('coverage').textContent=numeric(data.recordedMinutesLastHour)+' / 60';
     field('count').textContent=numeric(data.snapshotsLast24Hours);
-    field('activity-label').textContent=numeric(data.snapshotsLastHour)+' snapshots / '+numeric(data.recordedMinutesLastHour)+' active minutes';
+    const cadence=data.cadence;
+    field('activity-label').textContent=(cadence
+      ? 'Last 10m: '+numeric(cadence.recentRecordedMinutes)+' / '+numeric(cadence.recentWindowMinutes)+' · '
+      : '')+numeric(data.snapshotsLastHour)+' snapshots / '+numeric(data.recordedMinutesLastHour)+' active minutes';
     const bars=field('bars'); bars.replaceChildren();
     for(const [index,minute] of data.minutes.entries()){
       const bar=document.createElement('span');
@@ -86,7 +95,11 @@ export function mountTelemetryHealth(root) {
         ['Recovered interruptions since script load',numeric(report.recoveries)],
         ['Retries before latest successful upload',numeric(report.retriesBeforeSuccess)],
         ['Last reported failure',report.lastFailureAt?readableDate(report.lastFailureAt)+' ('+(report.lastFailureKind||'unknown')+')':'None reported'],
-        ['Last reported recovery',report.lastRecoveryAt?readableDate(report.lastRecoveryAt):'None reported']
+        ['Last reported recovery',report.lastRecoveryAt?readableDate(report.lastRecoveryAt):'None reported'],
+        ['Last reported tab state',report.tabHiddenAtAttempt?'Background tab':'Visible / not reported'],
+        ['Last scheduler',report.schedulerSource||'Not reported'],
+        ['Last scheduler delay',Number.isFinite(report.schedulerLagMs)
+          ? Math.round(report.schedulerLagMs/1000)+'s after target':'Not reported']
       ];
       const body=field('detail-body');body.replaceChildren();
       for(const [name,value] of details){

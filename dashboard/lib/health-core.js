@@ -34,12 +34,25 @@ export function buildHealthView({now, latestAt = null, minuteRows = [], snapshot
     return {at: new Date(at).toISOString(), snapshots: observed.get(at)||0};
   });
   const coveredMinutes = minutes.filter(p=>p.snapshots>0).length;
+  // Exclude the current partial UTC minute. This is the last ten fully
+  // elapsed minutes, not an uptime estimate or a fabricated heartbeat.
+  const completed10 = minutes.slice(-11,-1);
+  const recorded10 = completed10.filter(row=>row.snapshots>0).length;
+  const cadence = {
+    targetIntervalSeconds:60,
+    recentWindowMinutes:completed10.length,
+    recentRecordedMinutes:recorded10,
+    recentMissedMinutes:completed10.length-recorded10,
+    status: !lastReceivedAt ? 'no-data'
+      : recorded10>=9 ? 'on-target' : 'gaps'
+  };
   return {
     status: classifyFeed(ageSeconds),
     serverTime: new Date(nowMs).toISOString(),
     lastReceivedAt,
     ageSeconds,
     recordedMinutesLastHour: coveredMinutes,
+    cadence,
     snapshotsLastHour: minutes.reduce((sum,p)=>sum+p.snapshots,0),
     snapshotsLast24Hours: Math.max(0,Number(snapshots24h)||0),
     minutes,
@@ -53,7 +66,11 @@ export function buildHealthView({now, latestAt = null, minuteRows = [], snapshot
           retriesBeforeSuccess: Number(delivery.retriesBeforeSuccess)||0,
           lastFailureAt: delivery.lastFailureAt||null,
           lastFailureKind: delivery.lastFailureKind||'',
-          lastRecoveryAt: delivery.lastRecoveryAt||null
+          lastRecoveryAt: delivery.lastRecoveryAt||null,
+          schedulerLagMs:Math.min(86_400_000,Math.max(0,Number(delivery.schedulerLagMs)||0)),
+          schedulerSource:typeof delivery.schedulerSource==='string'
+            ? delivery.schedulerSource.slice(0,20):'',
+          tabHiddenAtAttempt:delivery.tabHiddenAtAttempt===true
         }
       : null
   };

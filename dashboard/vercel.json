@@ -19,5 +19,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/telemetry.js": {
+      "maxDuration": 30
+    }
+  }
 }

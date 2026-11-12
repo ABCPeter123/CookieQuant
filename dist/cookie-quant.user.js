@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.12.2
+// @version      2026.11.12.3
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.2" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.3" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.12.2";
+        const TOOLKIT_VERSION = "2026.11.12.3";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -6287,9 +6287,10 @@
         const CQ_TELEMETRY_KEY = "cookiequant:telemetry:v1";
         const CQ_TELEMETRY_URL = "https://cookiequant-dashboard.vercel.app/api/telemetry";
         const CQ_TELEMETRY_INTERVAL_MS = 60_000;
-        const CQ_TELEMETRY_TIMEOUT_MS = 12_000;
+        const CQ_TELEMETRY_TIMEOUT_MS = 25_000;
         const CQ_TELEMETRY_STALE_MS = 150_000;
-        const CQ_TELEMETRY_WATCHDOG_MS = 15_000;
+        const CQ_TELEMETRY_WATCHDOG_MS = 8_000;
+        const CQ_TELEMETRY_WORKER_PULSE_MS = 8_000;
         const cloudConfig = () => {
           try { return JSON.parse(localStorage.getItem(CQ_TELEMETRY_KEY) || "null"); }
           catch { return null; }
@@ -6314,6 +6315,11 @@
           lastFailureAt: 0,
           lastFailureKind: "",
           lastRecoveryAt: 0,
+          // Measures scheduler lateness, not merely network failures. Background
+          // browser tabs can be suspended even while the network is healthy.
+          schedulerLagMs: 0,
+          schedulerSource: "startup",
+          tabHiddenAtAttempt: false,
           get health() {
             return {
               enabled: !!cloudConfig()?.enabled, status: this.status,
@@ -6323,7 +6329,10 @@
               successfulRecoveriesSinceLoad: this.recoveryCount,
               lastFailureAt: this.lastFailureAt ? new Date(this.lastFailureAt).toISOString() : null,
               nextAttempt: this.nextAttemptAt ? new Date(this.nextAttemptAt).toISOString() : null,
-              stale: !!this.lastSent && Date.now() - this.lastSent > CQ_TELEMETRY_STALE_MS
+              stale: !!this.lastSent && Date.now() - this.lastSent > CQ_TELEMETRY_STALE_MS,
+              schedulerLagMs: this.schedulerLagMs,
+              schedulerSource: this.schedulerSource,
+              tabHiddenAtAttempt: this.tabHiddenAtAttempt
             };
           },
           connect(writeKey) {
@@ -6355,7 +6364,7 @@
             void this.push(true);
             return true;
           },
-          checkHealth() {
+          checkHealth(source = "timer") {
             if (!toolkit.active || !cloudConfig()?.enabled) return;
             const now = Date.now();
             if (this.pending) {
@@ -6368,9 +6377,9 @@
               this.status = "Telemetry stale. Reconnecting...";
               this.nextAttemptAt = 0;
             }
-            if (!this.lastAttemptAt || now >= this.nextAttemptAt) void this.push();
+            if (!this.lastAttemptAt || now >= this.nextAttemptAt) void this.push(false, source);
           },
-          async push(force = false) {
+          async push(force = false, scheduler = "manual") {
             if (!toolkit.active || !window.Game?.ready) return false;
             const settings = cloudConfig();
             if (!settings?.enabled || !settings.key || this.pending) return false;
@@ -6381,6 +6390,13 @@
               this.nextAttemptAt = now + 10_000;
               return false;
             }
+            // If the browser freezes a tab for minutes, record the missed deadline.
+            // We cannot reconstruct market quotes that the game never sampled.
+            const deadline = this.nextAttemptAt > 0 ? this.nextAttemptAt
+              : this.lastAttemptAt ? this.lastAttemptAt + CQ_TELEMETRY_INTERVAL_MS : now;
+            this.schedulerLagMs = Math.min(86_400_000, Math.max(0, now - deadline));
+            this.schedulerSource = scheduler;
+            this.tabHiddenAtAttempt = document.hidden === true;
             this.pending = true;
             this.attemptCount++;
             this.lastAttemptAt = now;
@@ -6423,6 +6439,9 @@
                 recoveries: this.recoveryCount + (this.consecutiveFailures > 0 ? 1 : 0),
                 lastFailureAt: this.lastFailureAt ? new Date(this.lastFailureAt).toISOString() : null,
                 lastFailureKind: this.lastFailureKind,
+                schedulerLagMs: this.schedulerLagMs,
+                schedulerSource: this.schedulerSource,
+                tabHiddenAtAttempt: this.tabHiddenAtAttempt,
                 lastRecoveryAt: this.consecutiveFailures > 0
                   ? new Date().toISOString()
                   : this.lastRecoveryAt ? new Date(this.lastRecoveryAt).toISOString() : null
@@ -6470,7 +6489,10 @@
                 this.lastRecoveryAt = this.lastSent;
               }
               this.consecutiveFailures = 0;
-              this.nextAttemptAt = this.lastSent + CQ_TELEMETRY_INTERVAL_MS;
+              // Start-to-start 60-second cadence. Do not accumulate network latency
+              // and heartbeat polling delay after every successful upload.
+              this.nextAttemptAt = Math.max(this.lastAttemptAt + CQ_TELEMETRY_INTERVAL_MS,
+                this.lastSent + 3_000);
               this.status = "Connected. Last upload " + new Date(this.lastSent).toLocaleTimeString() +
                 " (tick " + tick + ")";
               return true;
@@ -6501,6 +6523,12 @@
           },
           cleanup() {
             this.requestController?.abort();
+            toolkit.telemetryWorker?.terminate?.();
+            toolkit.telemetryWorker = null;
+            if (toolkit.telemetryWorkerUrl) {
+              URL.revokeObjectURL(toolkit.telemetryWorkerUrl);
+              toolkit.telemetryWorkerUrl = null;
+            }
             window.removeEventListener("online", onTelemetryRecovery);
             window.removeEventListener("focus", onTelemetryRecovery);
             window.removeEventListener("pageshow", onTelemetryRecovery);
@@ -6520,7 +6548,37 @@
         window.addEventListener("focus", onTelemetryRecovery);
         window.addEventListener("pageshow", onTelemetryRecovery);
         document.addEventListener("visibilitychange", onTelemetryVisibility);
-        toolkit.telemetryTimer = setInterval(() => toolkit.telemetry.checkHealth(), CQ_TELEMETRY_WATCHDOG_MS);
+        // Three independent wake sources: main-thread timer, lightweight worker,
+        // and the game's active logic loop. They share the same pending/deadline
+        // guard, so a single minute never triggers a burst of parallel requests.
+        toolkit.telemetryTimer = setInterval(
+          () => toolkit.telemetry.checkHealth("timer"), CQ_TELEMETRY_WATCHDOG_MS);
+        if (window.Worker && window.Blob && window.URL) {
+          try {
+            const code = `setInterval(() => postMessage("pulse"), ${CQ_TELEMETRY_WORKER_PULSE_MS});`;
+            const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+            try {
+              toolkit.telemetryWorker = new Worker(url);
+              toolkit.telemetryWorkerUrl = url;
+              toolkit.telemetryWorker.onmessage = () => toolkit.telemetry.checkHealth("worker");
+            } catch (error) {
+              URL.revokeObjectURL(url);
+              throw error;
+            }
+          } catch (error) {
+            console.warn("[CookieQuant] Telemetry worker unavailable; using game loop and timer.");
+          }
+        }
+        if (typeof Game.registerHook === "function") {
+          let lastLogicCheck = 0;
+          Game.registerHook("logic", () => {
+            if (!toolkit.active) return;
+            const now = Date.now();
+            if (now - lastLogicCheck < CQ_TELEMETRY_WATCHDOG_MS) return;
+            lastLogicCheck = now;
+            toolkit.telemetry.checkHealth("game-loop");
+          });
+        }
         if (cloudConfig()?.enabled) setTimeout(() => toolkit.telemetry.reconnect("automatic startup"), 1_500);
       
         saveControls();

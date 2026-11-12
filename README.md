@@ -18,6 +18,8 @@ A browser-based strategy engine for [Cookie Clicker](https://orteil.dashnet.org/
 
 CookieQuant can stream **real gameplay telemetry** to its cloud research terminal using an opt-in authenticated userscript publisher, a Neon database, and public read-only Vercel endpoints. Live mode shows actual market quotes, the trading engine's own forecasts and portfolio targets, stock positions, trade counts, and Garden / Godzamok / Ascension statuses.
 
+The updated publisher (v2026.11.12.3) targets **one successful upload per minute while Cookie Clicker runs**. It uses worker, game-loop and timer wake sources, retries failed attempts and reports recent 10-minute coverage. Sleeping browsers and closed tabs cannot generate fresh game observations. A server poll cannot replace the active game publisher. Keep the browser awake for sustained coverage.
+
 The live dashboard also displays a **telemetry health monitor** showing upload freshness, the last hour of recorded ingest activity, and recovery diagnostics from the updated game publisher. Failed uploads do not stop game automation, and the browser continues retrying automatically.
 
 Live mode now provides a **cross-asset quantitative terminal**: 18 synchronized stock traces, P05–P95 Monte Carlo forecast intervals for every product, scenario histograms, execution/portfolio positioning and a joint-shock correlation matrix.
