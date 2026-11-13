@@ -1,6 +1,6 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { compactSnapshot, shouldArchiveScenarios } from './archive-policy.js';
+import { compactSnapshot, shouldArchiveScenarios, sameMinuteObservation } from './archive-policy.js';
 import { applyReservation } from './r2-budget-core.js';
 import { explainR2Failure } from './r2-diagnostics.js';
 
@@ -158,11 +158,11 @@ export async function archiveSnapshot(payload,receivedAt=new Date().toISOString(
   }
   const row=compactSnapshot(payload,at);
   const hour=at.slice(11,13);
-  // Full-resolution history lives in 60-row hourly objects, not a single
+  // Full-resolution history lives in minute-granular hourly objects, not a single
   // growing day file that would have to be rewritten in full every minute.
   const hourly=await editJson('hourly/'+day+'/'+hour+'.json.gz',current=>{
     const rows=current?.rows?.slice()||[];
-    const match=rows.findIndex(v=>v.run===row.run&&v.tick===row.tick);
+    const match=rows.findIndex(v=>sameMinuteObservation(v,row));
     if(match>=0)rows[match]=row;else rows.push(row);
     rows.sort((a,b)=>Date.parse(a.receivedAt)-Date.parse(b.receivedAt));
     return {date:day,hour,rows};
@@ -182,7 +182,7 @@ export async function archiveSnapshot(payload,receivedAt=new Date().toISOString(
   });
   await editJson('latest.json.gz',current=>{
     const history=current?.history?.slice()||[];
-    const position=history.findIndex(v=>v.run===row.run&&v.tick===row.tick);
+    const position=history.findIndex(v=>sameMinuteObservation(v,row));
     if(position>=0)history[position]=row;else history.push(row);
     history.sort((a,b)=>Date.parse(a.receivedAt)-Date.parse(b.receivedAt));
     const newest=history.slice(-120);
@@ -192,7 +192,7 @@ export async function archiveSnapshot(payload,receivedAt=new Date().toISOString(
       receivedAt:older?current.receivedAt:at,
       payload:older?current.payload:payload,
       history:newest,
-      // Count is an estimate used for UI only; original snapshots are immutable.
+      // Count is an estimate used for UI only; each run+minute contributes once.
       total:Math.max(current?.total||0,0)+(position<0 && (!older || history.length<120)?1:0)
     };
   });

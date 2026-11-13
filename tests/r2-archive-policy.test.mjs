@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {compactSnapshot,shouldArchiveScenarios,FULL_SCENARIO_INTERVAL_TICKS} from '../dashboard/lib/archive-policy.js';
+import {compactSnapshot,shouldArchiveScenarios,sameMinuteObservation,FULL_SCENARIO_INTERVAL_TICKS} from '../dashboard/lib/archive-policy.js';
 
 const buildSnapshot=()=>{
   const goods=Array.from({length:18},(_,id)=>({
@@ -45,4 +45,20 @@ test('periodic stochastic archives, forced legacy backfill and tick fallback',()
   assert.equal(shouldArchiveScenarios('2026-11-12T14:45:00.000Z',120),true);
   assert.equal(shouldArchiveScenarios('2026-11-12T14:45:00.000Z',121,{preserveFull:true}),true);
   assert.throws(()=>shouldArchiveScenarios('invalid',121),/Invalid/);
+});
+
+test('live snapshot identity retains unchanged market ticks across distinct received minutes',()=>{
+  const snapshot=(tick,receivedAt,run='test-run-100')=>({run,tick,receivedAt});
+  assert.equal(sameMinuteObservation(
+    snapshot(873,'2026-11-13T00:12:05.000Z'),
+    snapshot(873,'2026-11-13T00:13:05.000Z')),false);
+  assert.equal(sameMinuteObservation(
+    snapshot(873,'2026-11-13T00:13:05.000Z'),
+    snapshot(873,'2026-11-13T00:13:59.000Z')),true);
+  assert.equal(sameMinuteObservation(
+    snapshot(873,'2026-11-13T00:13:05.000Z'),
+    snapshot(874,'2026-11-13T00:13:55.000Z')),true);
+  assert.equal(sameMinuteObservation(
+    snapshot(873,'2026-11-13T00:13:05.000Z'),
+    snapshot(873,'2026-11-13T00:13:09.000Z','another-run')),false);
 });

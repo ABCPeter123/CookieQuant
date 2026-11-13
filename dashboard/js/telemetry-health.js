@@ -28,7 +28,7 @@ export function mountTelemetryHealth(root) {
     '<div class="health-metrics">',
       '<div><span>LAST RECEIVED</span><strong id="health-age">...</strong><small id="health-time">Waiting for server response</small></div>',
       '<div><span>RECORDED MINUTES / 60M</span><strong id="health-coverage">-- / 60</strong><small>Observed snapshot coverage, not uptime</small></div>',
-      '<div><span>SNAPSHOTS / 24H</span><strong id="health-count">--</strong><small>Persisted game ticks</small></div>',
+      '<div><span>SNAPSHOTS / 24H</span><strong id="health-count">--</strong><small>Stored observations, including unchanged ticks</small></div>',
       '<div><span>RECOVERED INTERRUPTIONS</span><strong id="health-recoveries">--</strong><small>Reported by last successful publisher update</small></div>',
     '</div>',
     '<div class="health-activity"><div class="health-activity-head">',

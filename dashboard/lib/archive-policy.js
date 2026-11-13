@@ -16,6 +16,18 @@ export function shouldArchiveScenarios(receivedAt, tick, options = {}) {
     (Number.isSafeInteger(tick) && tick >= 0 && tick % FULL_SCENARIO_INTERVAL_TICKS === 0);
 }
 
+// A market tick can remain unchanged across several real-time uploads.
+// Identify live observations by their server-received UTC minute, not tick.
+// Retry in the same minute replaces the same observation. Legacy migration
+// continues to use its own run+tick identity.
+export function sameMinuteObservation(left, right) {
+  return Boolean(left && right &&
+    typeof left.run === 'string' && left.run === right.run &&
+    typeof left.receivedAt === 'string' &&
+    typeof right.receivedAt === 'string' &&
+    left.receivedAt.slice(0,16) === right.receivedAt.slice(0,16));
+}
+
 export function compactSnapshot(payload, receivedAt) {
   if (!payload || !payload.market || !Array.isArray(payload.market.goods)) {
     throw Error('Invalid market snapshot');
