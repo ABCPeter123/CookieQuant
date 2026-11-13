@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.12.3
+// @version      2026.11.12.4
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.3" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.4" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.12.3";
+        const TOOLKIT_VERSION = "2026.11.12.4";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -6289,8 +6289,8 @@
         const CQ_TELEMETRY_INTERVAL_MS = 60_000;
         const CQ_TELEMETRY_TIMEOUT_MS = 25_000;
         const CQ_TELEMETRY_STALE_MS = 150_000;
-        const CQ_TELEMETRY_WATCHDOG_MS = 8_000;
-        const CQ_TELEMETRY_WORKER_PULSE_MS = 8_000;
+        const CQ_TELEMETRY_WATCHDOG_MS = 1_000;
+        const CQ_TELEMETRY_WORKER_PULSE_MS = 1_000;
         const cloudConfig = () => {
           try { return JSON.parse(localStorage.getItem(CQ_TELEMETRY_KEY) || "null"); }
           catch { return null; }
