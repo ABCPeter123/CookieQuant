@@ -1,8 +1,9 @@
 import { neon } from '@neondatabase/serverless';
 import { latestSnapshot, readDays, downsample, rangeStart } from '../lib/r2-storage.js';
+import { HISTORY_RANGE_MINUTES } from '../lib/history-window.js';
 
 const DASHBOARD_ORIGIN = 'https://cookiequant-dashboard.vercel.app';
-const RANGES = Object.freeze({ '24h': 1, '7d': 7, '30d': 30, '1y': 365, all: 0 });
+const RANGES = HISTORY_RANGE_MINUTES;
 const SAMPLES = 450;
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -15,7 +16,7 @@ export default async function handler(req, res) {
   if (process.env.TELEMETRY_BACKEND !== 'r2' && !process.env.DATABASE_URL) return res.status(503).json({ error: 'Storage unavailable' });
   const range = typeof req.query?.range === 'string' ? req.query.range : '24h';
   if (!Object.hasOwn(RANGES, range)) return res.status(400).json({ error: 'Invalid history range' });
-  const days = RANGES[range];
+  const minutes = RANGES[range];
   try {
     if (process.env.TELEMETRY_BACKEND === 'r2') {
       const state = await latestSnapshot();
@@ -42,7 +43,7 @@ export default async function handler(req, res) {
           min(received_at) OVER () AS first_at,
           max(received_at) OVER () AS last_at
         FROM cq_telemetry_snapshots
-        WHERE (${days}::int = 0 OR received_at >= NOW() - (${days}::int * INTERVAL '1 day'))
+        WHERE (${minutes}::int = 0 OR received_at >= NOW() - (${minutes}::int * INTERVAL '1 minute'))
       ), picked AS (
         SELECT DISTINCT ON (bucket) id, total, first_at, last_at
         FROM (

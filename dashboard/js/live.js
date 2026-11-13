@@ -4,7 +4,7 @@ import { mountTelemetryHealth } from './telemetry-health.js';
 const CLOUD_ENDPOINT = '/api/live';
 const CLOUD_HEALTH_ENDPOINT = '/api/health';
 const CLOUD_HISTORY_ENDPOINT = '/api/history';
-const HISTORY_RANGES = ['24h', '7d', '30d', '1y', 'all'];
+const HISTORY_RANGES = ['1h', '6h', '12h', '24h', '7d', '30d', '1y', 'all'];
 let quantTerminal;
 let healthMonitor;
 const cloud = { latest: null, history: [], timer: null, active: false, historyRange: '24h', historyLoaded: '', historyLastFetched: 0, historyTotal: 0, historyRequest: 0, liveRequest: 0, healthTimer: null, healthRequest: 0 };

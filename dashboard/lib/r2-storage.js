@@ -3,6 +3,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { compactSnapshot, shouldArchiveScenarios, sameMinuteObservation } from './archive-policy.js';
 import { applyReservation } from './r2-budget-core.js';
 import { explainR2Failure } from './r2-diagnostics.js';
+import { rangeStart as windowRangeStart, hourlyKeysBetween } from './history-window.js';
 
 const PREFIX = 'cookiequant/v1';
 const DAY_MS = 86_400_000;
@@ -220,14 +221,14 @@ export async function readDays(first,last,maxDays=500) {
   else days=[...new Set(Array.from({length:maxDays},(_,i)=>
     from+Math.floor((to-from)*i/(maxDays-1))))];
   const calls=[];
-  for(const day of days){
-    const date=isoDay(day);
-    if(detailed){
-      for(let hour=0;hour<24;hour++){
-        const hh=String(hour).padStart(2,'0');
-        calls.push(()=>readHour(date,hh));
-      }
-    }else calls.push(()=>readDay(date));
+  if(detailed){
+    // Fetch only the hourly R2 objects intersecting the requested time window.
+    // A 1h view normally reads 2 objects instead of 24 or 48 per day.
+    for(const key of hourlyKeysBetween(first,last)){
+      calls.push(()=>readHour(key.slice(0,10),key.slice(11,13)));
+    }
+  }else{
+    for(const day of days)calls.push(()=>readDay(isoDay(day)));
   }
   const collected=[];
   for(let start=0;start<calls.length;start+=20){
@@ -241,9 +242,5 @@ export function downsample(rows,max=450) {
   return Array.from({length:max},(_,i)=>rows[Math.round((rows.length-1)*i/(max-1))]);
 }
 export function rangeStart(end,range,firstAt) {
-  const last=Date.parse(end),start=Date.parse(firstAt);
-  if(range==='all')return firstAt;
-  const days=({'24h':1,'7d':7,'30d':30,'1y':365})[range];
-  if(!days)throw Error('Invalid history range');
-  return new Date(Math.max(start,last-days*DAY_MS)).toISOString();
+  return windowRangeStart(end,range,firstAt);
 }

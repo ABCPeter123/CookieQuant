@@ -46,7 +46,7 @@ function rangeOf(values,pad) {
   return [min-spread*.12,max+spread*.12];
 }
 function makeTemplate() {
-  const ranges=['24h','7d','30d','1y','all'];
+  const ranges=['1h','6h','12h','24h','7d','30d','1y','all'];
   return [
     '<div class="qt-top"><div><div class="qt-eyebrow">QUANTITATIVE RESEARCH / LIVE INSTRUMENTS</div>',
     '<h3 class="qt-title">Cross-asset intelligence</h3></div>',

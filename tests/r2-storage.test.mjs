@@ -25,6 +25,7 @@ test('R2 adapter compresses immutable game snapshots and maintains atomic indice
   assert.match(r2,/latest\.json\.gz/);
   assert.match(r2,/function downsample|export function downsample/);
   assert.match(r2,/function rangeStart|export function rangeStart/);
+  assert.match(r2,/hourlyKeysBetween/);
   assert.doesNotMatch(r2,/hardcoded-secret-token|ACCESS_KEY_ID = "[a-zA-Z0-9]{20,}"/);
 });
 

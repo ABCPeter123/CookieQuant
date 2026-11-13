@@ -61,7 +61,7 @@ test('public all-time history needs no viewer key and is bounded only in display
  assert.match(api,/Access-Control-Allow-Origin', '\*'/);
  assert.doesNotMatch(api,/TELEMETRY_READ_KEY|authorized\(req\)|Invalid viewer key/);
  assert.match(api,/req.method !== 'GET'/);
- assert.match(api,/all: 0/);
+ assert.match(api,/HISTORY_RANGE_MINUTES/);
  assert.match(api,/SAMPLES = 450/);
  assert.match(api,/row_number\(\) OVER/);
  assert.doesNotMatch(api,/DELETE FROM/);
