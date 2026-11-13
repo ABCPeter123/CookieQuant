@@ -57,8 +57,8 @@ function makeTemplate() {
     '<h4><span class="qt-id">01 /</span> Multi-asset market tape</h4>',
     '<p>All stocks, one synchronized time axis. Select an instrument to emphasize it.</p></div>',
     '<div class="qt-actions" id="qt-units">',
-    '<button type="button" class="qt-toggle is-active" data-units="relative">RETURN %</button>',
-    '<button type="button" class="qt-toggle" data-units="price">PRICE $</button>',
+    '<button type="button" class="qt-toggle is-active" data-units="relative" aria-pressed="true">RETURN %</button>',
+    '<button type="button" class="qt-toggle" data-units="price" aria-pressed="false">PRICE $</button>',
     '<button type="button" class="qt-toggle" id="qt-focus" aria-pressed="false">ISOLATE: OFF</button>',
     '</div></div>',
     '<div class="qt-range-wrap"><div id="cloud-ranges" class="telemetry-ranges">',
@@ -350,16 +350,34 @@ export function mountQuantTerminal(root) {
     $('count').textContent=nfmt(state.goods.length,0);
     $('scenarios').textContent=state.metrics[0]?.count??'--';
     $('horizon').textContent=Number(snapshot.market.horizon)||'--';
-    const points=state.observations.length,underlying=options.historyLoaded===options.historyRange?options.historyTotal:points;
+    updateTapeCaption();
+    drawEverything();
+  }
+  function updateTapeCaption(){
+    const points=state.observations.length;
+    const options=state.options;
+    const underlying=options.historyLoaded===options.historyRange?options.historyTotal:points;
     const labelRange=options.historyRange==='all'?'ALL-TIME':(options.historyRange||'24h').toUpperCase();
     node.caption.innerHTML='<span>'+nfmt(points,0)+' displayed observations / '+nfmt(underlying,0)+' stored snapshots · '+labelRange+'</span>'+
       '<span>ACTUAL GAME QUOTES · '+(state.units==='relative'?'REBASED PERCENT CHANGE':'MARKET DOLLARS')+'</span>';
-    drawEverything();
+  }
+  function setTapeUnits(units){
+    if(units!=='relative'&&units!=='price')return;
+    if(state.units===units)return;
+    state.units=units;
+    root.querySelectorAll('[data-units]').forEach(b=>{
+      const selected=b.dataset.units===units;
+      b.classList.toggle('is-active',selected);
+      b.setAttribute('aria-pressed',String(selected));
+    });
+    // Redraw the tape immediately. A full render recalculates unrelated Monte
+    // Carlo metrics, the forecast table and the correlation chart, delaying
+    // visual feedback from this simple view-only control.
+    updateTapeCaption();
+    if(state.latest)drawTape();
   }
   root.querySelectorAll('[data-units]').forEach(button=>button.addEventListener('click',()=>{
-    state.units=button.dataset.units;
-    root.querySelectorAll('[data-units]').forEach(b=>b.classList.toggle('is-active',b===button));
-    if(state.latest)render(state.latest,state.history,state.options);
+    setTapeUnits(button.dataset.units);
   }));
   $('focus').addEventListener('click',()=>{
     state.isolated=!state.isolated;
