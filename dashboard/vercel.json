@@ -24,5 +24,8 @@
     "api/telemetry.js": {
       "maxDuration": 30
     }
+  },
+  "git": {
+    "deploymentEnabled": false
   }
 }
