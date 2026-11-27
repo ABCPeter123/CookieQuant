@@ -90,6 +90,11 @@ test('toggle, status, timer, savings priority and cleanup remain wired',()=>{
   assert.match(source,/toolkit\.elderPledgeTimer = setInterval\(runElderPledgeAutomation, ELDER_PLEDGE_CHECK_MS\)/);
   assert.match(source,/clearInterval\(toolkit\.elderPledgeTimer\)/);
   assert.match(source,/if \(getPendingElderPledge\(\)\) return;/);
+  const autobuy = source.slice(source.indexOf('  toolkit.autoBuyTimer = setInterval('));
+  assert.ok(autobuy.indexOf('runGodzamokRebuild(now)') <
+    autobuy.indexOf('getPendingElderPledge()'), 'never delay Godzamok recovery for Elder Pledge');
+  assert.ok(autobuy.indexOf('runFtHoFTowerRebuild(now)') <
+    autobuy.indexOf('getPendingElderPledge()'), 'never delay tower recovery for Elder Pledge');
   assert.doesNotMatch(code,/!controls\.autoBuy \|\| !controls\.autoBuyUpgrades/);
   assert.doesNotMatch(code,/canBuyWithoutBreakingReserve/);
   assert.match(source,/Elder Pledge: \$\{toolkit\.elderPledgeStatus\}/);

@@ -1,5 +1,5 @@
 (() => {
-  const TOOLKIT_VERSION = "2026.11.27.1";
+  const TOOLKIT_VERSION = "2026.11.27.2";
   /*
    * COOKIE CLICKER TOOLKIT
    * Paste this entire file into the browser console.
@@ -4098,9 +4098,6 @@
 
   toolkit.autoBuyTimer = setInterval(() => {
     if (!toolkit.active || !controls.autoBuy) return;
-    // Save for an expired, available Pledge before unrelated auto-purchases.
-    // Pledge itself works even when normal auto-buy has been turned off.
-    if (getPendingElderPledge()) return;
     if (isAscensionAutomationBusy()) return;
     if (Game.buyMode !== 1 || Game.OnAscend) return;
 
@@ -4113,6 +4110,10 @@
      */
     if (runGodzamokRebuild(now)) return;
     if (runFtHoFTowerRebuild(now)) return;
+
+    // Recover sacrificed buildings before saving for the next Elder Pledge.
+    // Once restored, prevent unrelated purchases from draining pledge funds.
+    if (getPendingElderPledge()) return;
 
     if (now - toolkit.lastPurchaseAt < AUTO_BUY_COOLDOWN_MS) return;
 

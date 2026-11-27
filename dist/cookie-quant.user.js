@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.27.1
+// @version      2026.11.27.2
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.27.1" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.27.2" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.27.1";
+        const TOOLKIT_VERSION = "2026.11.27.2";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -4124,9 +4124,6 @@
       
         toolkit.autoBuyTimer = setInterval(() => {
           if (!toolkit.active || !controls.autoBuy) return;
-          // Save for an expired, available Pledge before unrelated auto-purchases.
-          // Pledge itself works even when normal auto-buy has been turned off.
-          if (getPendingElderPledge()) return;
           if (isAscensionAutomationBusy()) return;
           if (Game.buyMode !== 1 || Game.OnAscend) return;
       
@@ -4139,6 +4136,10 @@
            */
           if (runGodzamokRebuild(now)) return;
           if (runFtHoFTowerRebuild(now)) return;
+      
+          // Recover sacrificed buildings before saving for the next Elder Pledge.
+          // Once restored, prevent unrelated purchases from draining pledge funds.
+          if (getPendingElderPledge()) return;
       
           if (now - toolkit.lastPurchaseAt < AUTO_BUY_COOLDOWN_MS) return;
       

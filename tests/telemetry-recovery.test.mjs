@@ -45,7 +45,7 @@ test('cloud publisher retries after failure, detects staleness and recovers afte
     setInterval: (fn, ms) => { timers.set(ms, fn); return ms; },
     clearInterval: ms => timers.delete(ms),
     setTimeout: (fn, ms) => ms, clearTimeout: () => {},
-    AbortController, Date, Math, TOOLKIT_VERSION: '2026.11.27.1', console: { warn() {}, error() {} }
+    AbortController, Date, Math, TOOLKIT_VERSION: '2026.11.27.2', console: { warn() {}, error() {} }
   });
   const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.ok(timers.has(1000), '1-second watchdog installed');
