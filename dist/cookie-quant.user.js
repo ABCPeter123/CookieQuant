@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.26.4
+// @version      2026.11.27.1
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.4" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.27.1" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.26.4";
+        const TOOLKIT_VERSION = "2026.11.27.1";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -4038,69 +4038,80 @@
         }
       
         /*
-         * Elder Pledge is a repeatable switch, not a permanent research purchase.
-         * Buy it again once the previous pledge expires, but never auto-buy the
-         * permanent Elder Covenant or spend a protected bank reserve.
+         * Elder Pledge is an explicitly opted-in repeatable purchase. It runs
+         * independently of normal building/upgrade autobuy. Trust the game's shop
+         * rather than old upgrade.bought flags when a pledge is available again.
          */
+        function getPendingElderPledge() {
+          if (!toolkit.active || !controls.autoElderPledge ||
+              (Number(Game.pledgeT) || 0) > 0 ||
+              Game.Has?.("Elder Covenant")) return null;
+          const pledge = Game.Upgrades?.["Elder Pledge"];
+          return pledge && (Game.UpgradesInStore || []).includes(pledge) ? pledge : null;
+        }
+      
         function runElderPledgeAutomation() {
           if (!toolkit.active || !controls.autoElderPledge) {
             toolkit.elderPledgeStatus = "Off";
             return false;
           }
-          if (!controls.autoBuy || !controls.autoBuyUpgrades) {
-            toolkit.elderPledgeStatus = "Waiting for auto-buy and Buy upgrades";
-            return false;
-          }
-          if (isAscensionAutomationBusy() || Game.OnAscend ||
-              Game.AscendTimer || Game.ReincarnateTimer || Game.promptOn ||
-              Game.buyMode !== 1) return false;
-      
-          // The game counts pledge duration in frames. A positive timer means
-          // it is already active, regardless of the shop item's bought flag.
           const remaining = Math.max(0, Number(Game.pledgeT) || 0);
           if (remaining > 0) {
-            const seconds = Math.ceil(remaining / Math.max(Number(Game.fps) || 30, 1));
-            toolkit.elderPledgeStatus = `Active; ${formatTime(seconds)} remaining`;
+            toolkit.elderPledgeStatus = `Active; ${formatTime(Math.ceil(remaining / Math.max(Number(Game.fps) || 30, 1)))} remaining`;
             return false;
           }
           if (Game.Has?.("Elder Covenant")) {
-            toolkit.elderPledgeStatus = "Elder Covenant active; no pledge needed";
+            toolkit.elderPledgeStatus = "Elder Covenant active; pledge not needed";
             return false;
           }
-          if (!Game.Has?.("Elder Pact")) {
-            toolkit.elderPledgeStatus = "Waiting for Elder Pact (stage 3)";
+          if (isAscensionAutomationBusy() || Game.OnAscend ||
+              Game.AscendTimer || Game.ReincarnateTimer || Game.promptOn) {
+            toolkit.elderPledgeStatus = "Waiting for game transition or prompt";
+            return false;
+          }
+          const upgrade = getPendingElderPledge();
+          if (!upgrade) {
+            toolkit.elderPledgeStatus = Game.Has?.("Elder Pact")
+              ? "Waiting for Elder Pledge to return to the shop"
+              : controls.grandmapocalypseStageCap < 3
+                ? "Unlock Elder Pact first; Grandmapocalypse cap must allow stage 3"
+                : "Waiting for Elder Pact research (including One mind)";
             return false;
           }
           if (toolkit.godzamokRebuildQueue.length ||
               toolkit.ftHofTowerRebuildRemaining > 0 ||
               isClickRelatedBuffActive()) {
-            toolkit.elderPledgeStatus = "Waiting for active combo or building recovery";
-            return false;
-          }
-          if (performance.now() - toolkit.lastElderPledgeAt < 2500) return false;
-      
-          const upgrade = Game.Upgrades?.["Elder Pledge"];
-          if (!upgrade || !upgrade.unlocked || upgrade.bought ||
-              !(Game.UpgradesInStore || []).includes(upgrade) ||
-              typeof upgrade.canBuy !== "function" || !upgrade.canBuy()) {
-            toolkit.elderPledgeStatus = "Waiting for Elder Pledge in shop";
+            toolkit.elderPledgeStatus = "Waiting for click combo or building recovery";
             return false;
           }
           const price = Number(upgrade.getPrice?.());
-          if (!Number.isFinite(price) || price < 0) return false;
-          const target = {type: "upgrade", item: upgrade, name: upgrade.name, price};
-          if (!canBuyWithoutBreakingReserve(target)) {
-            toolkit.elderPledgeStatus = `Saving for Elder Pledge (${compactNumber(price)} cookies, reserve protected)`;
+          if (!Number.isFinite(price) || price < 0) {
+            toolkit.elderPledgeStatus = "Invalid Elder Pledge price";
             return false;
           }
-      
+          if ((Number(Game.cookies) || 0) < price) {
+            toolkit.elderPledgeStatus = `Saving for Elder Pledge (${compactNumber(price)} cookies)`;
+            return false;
+          }
+          // This time-sensitive switch has its own user toggle. Requiring the
+          // normal Lucky/Chain reserve prevented renewal even when affordable.
+          if (typeof upgrade.canBuy === "function" && !upgrade.canBuy()) {
+            toolkit.elderPledgeStatus = "In shop, but Elder Pledge is not purchasable yet";
+            return false;
+          }
+          if (performance.now() - toolkit.lastElderPledgeAt < 2500) return false;
           const beforePledges = Number(Game.pledges) || 0;
-          upgrade.buy();
-          if (!(Number(Game.pledgeT) > 0 || (Number(Game.pledges) || 0) > beforePledges)) {
-            toolkit.elderPledgeStatus = "Purchase did not activate; retrying when available";
+          toolkit.lastElderPledgeAt = performance.now();
+          try { upgrade.buy(); }
+          catch (error) {
+            toolkit.elderPledgeStatus = `Elder Pledge purchase failed: ${error?.message || error}`;
             return false;
           }
-          toolkit.lastElderPledgeAt = performance.now();
+          if (!((Number(Game.pledgeT) || 0) > 0 ||
+              (Number(Game.pledges) || 0) > beforePledges)) {
+            toolkit.elderPledgeStatus = "Purchase did not activate; will retry";
+            return false;
+          }
           toolkit.lastPurchaseAt = toolkit.lastElderPledgeAt;
           toolkit.lastPurchaseName = "Elder Pledge";
           toolkit.lastPurchasePrice = price;
@@ -4113,6 +4124,9 @@
       
         toolkit.autoBuyTimer = setInterval(() => {
           if (!toolkit.active || !controls.autoBuy) return;
+          // Save for an expired, available Pledge before unrelated auto-purchases.
+          // Pledge itself works even when normal auto-buy has been turned off.
+          if (getPendingElderPledge()) return;
           if (isAscensionAutomationBusy()) return;
           if (Game.buyMode !== 1 || Game.OnAscend) return;
       
@@ -5459,7 +5473,8 @@
                   <div style="font-weight:bold;margin-bottom:4px">Banks and Grandmapocalypse</div>
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><span>Chain reserve</span><input id="cct-chain-protection" type="checkbox"></label>
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><span>Protect shiny wrinklers</span><input id="cct-protect-shiny-wrinklers" type="checkbox"></label>
-                  <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0" title="Automatically renew Elder Pledge after it expires, once Elder Pact is unlocked. Requires Auto-buy master and Buy upgrades; protects your bank reserve. Never buys Elder Covenant."><span>Auto Elder Pledge</span><input id="cct-auto-elder-pledge" type="checkbox"></label>
+                  <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0" title="Automatically renew Elder Pledge when it appears in the shop. Runs independently of normal auto-buy; saves for it first. Never buys Elder Covenant."><span>Auto Elder Pledge</span><input id="cct-auto-elder-pledge" type="checkbox"></label>
+                  <div id="cct-elder-pledge-status" style="font:11px/1.45 monospace;color:#aaa;margin:0 0 8px">Waiting for Elder Pact</div>
                   <label style="display:block;margin:8px 0 3px">Grandmapocalypse cap
                     <select id="cct-grandmapocalypse-stage" style="width:100%;margin-top:2px;background:#222;color:#fff;border:1px solid #777;padding:3px">
                       <option value="0">Stage 0, block One mind</option><option value="1">Stage 1, allow One mind</option><option value="2">Stage 2, allow Brainsweep</option><option value="3">Stage 3, allow Elder Pact</option>
@@ -6230,6 +6245,7 @@
               }
             `;
       
+            panel.querySelector("#cct-elder-pledge-status").textContent = toolkit.elderPledgeStatus;
             panel.querySelector("#cct-godzamok-result").textContent =
               `${formatGodzamokResult()}. Completed sacrifices: ${toolkit.godzamokCompletedSacrifices}. ` +
               `Session net: ${toolkit.godzamokMeasuredNet < 0 ? "-" : "+"}${compactNumber(Math.abs(toolkit.godzamokMeasuredNet))}`;
