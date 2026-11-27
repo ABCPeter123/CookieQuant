@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.12.4
+// @version      2026.11.26.1
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.12.4" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.1" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.12.4";
+        const TOOLKIT_VERSION = "2026.11.26.1";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -663,8 +663,13 @@
           stockBook: savedControls.stockBook && typeof savedControls.stockBook === "object" ? savedControls.stockBook : null,
           godzamokSellAllV1: true,
           godzamokComboGoalV1: true,
-          godzamokObjective: savedControls.godzamokSellAllV1 && ["profit","prestige","combo","all"].includes(savedControls.godzamokObjective)
-            ? savedControls.godzamokObjective : "all",
+          // Migrate legacy unguarded sell-all defaults to profit mode.
+          // Explicitly selected guarded sell-all persists after this update.
+          godzamokSafetyV2: true,
+          godzamokObjective: savedControls.godzamokObjective === "all" && !savedControls.godzamokSafetyV2
+            ? "profit"
+            : ["profit","prestige","combo","all"].includes(savedControls.godzamokObjective)
+              ? savedControls.godzamokObjective : "profit",
           godzamokMaxRecoverySeconds: Number.isFinite(savedControls.godzamokMaxRecoverySeconds)
             ? Math.min(3600, Math.max(0, savedControls.godzamokMaxRecoverySeconds)) : 300,
           godzamokConfidence: Number.isFinite(savedControls.godzamokConfidence)
@@ -3262,7 +3267,8 @@
             recoveryRate * controls.godzamokMaxRecoverySeconds) : 0;
           if (prestige) {
             if (cost > lossLimit || recoverySeconds > controls.godzamokMaxRecoverySeconds || !(baked > 0)) return null;
-          } else if (!all && (combo ? !(profit > 0) : !(extra > (cost + forecast.interruptionCost) * GODZAMOK_PROFIT_MARGIN))) return null;
+          } else if (combo ? !(profit > 0)
+              : !(extra > (cost + forecast.interruptionCost) * GODZAMOK_PROFIT_MARGIN)) return null;
           const score = prestige ? baked / (Math.max(forecast.horizon || forecast.seconds, 1) + recoverySeconds) : profit;
           const total = Math.max(Number(Game.cookiesReset) || 0, 0) + Math.max(Number(Game.cookiesEarned) || 0, 0);
           const baseline = (forecast.rate * forecast.perClick + Math.max(Number(Game.cookiesPs) || 0, 0)) * forecast.seconds;
@@ -3293,7 +3299,7 @@
           return remaining === 0 ? best : null;
         }
       
-        function getGodzamokSellAllPlan(forecast) {
+        function getGodzamokSellAllPlan(forecast, budget) {
           const quantities = new Map();
           let sold=0, cost=0;
           for (const name of GODZAMOK_BUILDINGS) {
@@ -3306,7 +3312,7 @@
             quantities.set(name,quantity); sold+=quantity; cost+=quote.cost;
           }
           if (!sold) return null;
-          const plan=scoreGodzamokCandidate(cost,sold,forecast,Infinity);
+          const plan=scoreGodzamokCandidate(cost,sold,forecast,budget);
           return plan ? {...plan,quantities} : null;
         }
       
@@ -3429,7 +3435,7 @@
             totalCost += quote.cost;
             quotes.push({ name, building, quantity, ...quote });
           }
-          const rechecked = scoreGodzamokCandidate(totalCost, plan.sold, plan, plan.objective === "all" ? Infinity : bankBefore - reserve);
+          const rechecked = scoreGodzamokCandidate(totalCost, plan.sold, plan, bankBefore - reserve);
           if (!rechecked) return 0;
           Object.assign(plan, rechecked);
       
@@ -3559,8 +3565,8 @@
             toolkit.godzamokStatus = "Enable building auto-buy for immediate restoration";
             return;
           }
-          if (controls.godzamokObjective !== "all" && (toolkit.godzamokRebuildQueue.length ||
-              toolkit.ftHofTowerRebuildRemaining > 0)) {
+          if (toolkit.godzamokRebuildQueue.length ||
+              toolkit.ftHofTowerRebuildRemaining > 0) {
             toolkit.godzamokStatus = "Waiting for building restoration";
             return;
           }
@@ -3578,7 +3584,7 @@
               const forecast=getGodzamokForecast();
               if (!forecast) {toolkit.godzamokStatus="Sell all ready; waiting for click combo";return;}
               toolkit.godzamokNextPlanAt=performance.now()+1000;
-              const plan=getGodzamokSellAllPlan(forecast);
+              const plan=getGodzamokSellAllPlan(forecast, Number(Game.cookies) - Number(getReserve()));
               if (!plan) {toolkit.godzamokStatus="No allowed buildings available or invalid sale quote";return;}
               sellForGodzamok(plan);
               return;
@@ -3762,10 +3768,9 @@
             toolkit.godzamokStatus = totalBought > 0
               ? `Godzamok restoring: ${totalBought} buildings this pass`
               : "Godzamok restore waiting for cookies";
-            /* A waiting Godzamok rebuild is not a global autobuy lock. It will try
-             * again on the next scan, but normal buying and tower restoration may
-             * keep progressing meanwhile. */
-            return totalBought > 0;
+            /* Hold recovery funds for the missing buildings. Do not let normal
+             * purchases spend this bank while a restoration is incomplete. */
+            return true;
           }
       
           toolkit.godzamokRebuildBatch = 0;
@@ -3939,8 +3944,8 @@
            * Restore the sold buildings immediately so their click-related bonuses
            * apply for the rest of the active Click Frenzy or Dragonflight.
            */
-          if (runFtHoFTowerRebuild(now)) return;
           if (runGodzamokRebuild(now)) return;
+          if (runFtHoFTowerRebuild(now)) return;
       
           if (now - toolkit.lastPurchaseAt < AUTO_BUY_COOLDOWN_MS) return;
       
@@ -5254,7 +5259,7 @@
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><span>Sugar lump plan</span><input id="cct-sugar-lumps" type="checkbox"></label>
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><span>Auto FtHoF</span><input id="cct-force-hand" type="checkbox"></label>
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0" title="Sells low-tier buildings during Click Frenzy or Dragonflight when Godzamok is active."><span>Godzamok combo sell</span><input id="cct-godzamok-combos" type="checkbox"></label>
-                  <label>Godzamok goal <select id="cct-godzamok-goal"><option value="all">Sell ALL allowed buildings</option><option value="combo">Maximum net combo cookies</option><option value="prestige">Prestige / recovery balance</option><option value="profit">Bank profit only</option></select></label>
+                  <label>Godzamok goal <select id="cct-godzamok-goal"><option value="profit">Profit guarded (recommended)</option><option value="combo">Maximum net combo cookies</option><option value="prestige">Prestige / recovery balance</option><option value="all">Full sale (profit + reserve guarded)</option></select></label>
                   <label style="display:block">Max recovery time (seconds) <input id="cct-godzamok-recovery" type="number" min="0" max="3600" step="10" style="width:70px"></label>
                   <div id="cct-godzamok-budget" style="color:#aaa;font-size:11px"></div>
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0" title="Keep Godzamok in the Pantheon diamond slot outside active combos."><span>Auto Pantheon</span><input id="cct-pantheon-automation" type="checkbox"></label>
@@ -6049,10 +6054,10 @@
             panel.querySelector("#cct-godzamok-budget").textContent = controls.godzamokObjective === "prestige"
               ? `Estimated recovery income: ${compactNumber(recoveryIncome)}/s. Max sell/rebuy loss: ${compactNumber(recoveryBudget)}.`
               : controls.godzamokObjective === "all"
-                ? "Sell every allowed building, including the last Farm, without an affordability gate. Buy back what is affordable; queue the rest above reserve."
+                ? "Full sale only if predicted click gains exceed sell/rebuy and interruption costs by 25%, with full restoration affordable above reserve."
                 : controls.godzamokObjective === "combo"
                 ? "Maximize estimated extra combo cookies minus sell/rebuy cost. No recovery-time cap; restore immediately above reserve."
-                : "Bank-profit mode: sacrifices must pay for themselves.";
+                : "Profit guarded: expected click gains must exceed sell/rebuy and interruption costs by 25%, while protecting bank reserve."
             panel.querySelector("#cct-godzamok-recovery").disabled = controls.godzamokObjective !== "prestige";
             panel.querySelector("#cct-godzamok-resume").disabled =
               !controls.godzamokLossGuardPaused || Boolean(toolkit.godzamokLedger) || toolkit.godzamokRebuildQueue.length > 0;
