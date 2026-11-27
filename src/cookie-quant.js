@@ -1,5 +1,5 @@
 (() => {
-  const TOOLKIT_VERSION = "2026.11.27.2";
+  const TOOLKIT_VERSION = "2026.11.27.3";
   /*
    * COOKIE CLICKER TOOLKIT
    * Paste this entire file into the browser console.
@@ -148,7 +148,7 @@
   const WRINKLER_CHECK_MS = 1000;
   const WRINKLER_POP_COOLDOWN_MS = 2000;
   const AUTO_ELDER_PLEDGE = true;
-  const ELDER_PLEDGE_CHECK_MS = 1000;
+  const ELDER_PLEDGE_CHECK_MS = 200;
 
   /* SUGAR LUMP AUTOMATION */
   const AUTO_MANAGE_SUGAR_LUMPS = true;
@@ -4018,8 +4018,7 @@
    */
   function getPendingElderPledge() {
     if (!toolkit.active || !controls.autoElderPledge ||
-        (Number(Game.pledgeT) || 0) > 0 ||
-        Game.Has?.("Elder Covenant")) return null;
+        (Number(Game.pledgeT) || 0) > 0) return null;
     const pledge = Game.Upgrades?.["Elder Pledge"];
     return pledge && (Game.UpgradesInStore || []).includes(pledge) ? pledge : null;
   }
@@ -4034,10 +4033,6 @@
       toolkit.elderPledgeStatus = `Active; ${formatTime(Math.ceil(remaining / Math.max(Number(Game.fps) || 30, 1)))} remaining`;
       return false;
     }
-    if (Game.Has?.("Elder Covenant")) {
-      toolkit.elderPledgeStatus = "Elder Covenant active; pledge not needed";
-      return false;
-    }
     if (isAscensionAutomationBusy() || Game.OnAscend ||
         Game.AscendTimer || Game.ReincarnateTimer || Game.promptOn) {
       toolkit.elderPledgeStatus = "Waiting for game transition or prompt";
@@ -4050,12 +4045,6 @@
         : controls.grandmapocalypseStageCap < 3
           ? "Unlock Elder Pact first; Grandmapocalypse cap must allow stage 3"
           : "Waiting for Elder Pact research (including One mind)";
-      return false;
-    }
-    if (toolkit.godzamokRebuildQueue.length ||
-        toolkit.ftHofTowerRebuildRemaining > 0 ||
-        isClickRelatedBuffActive()) {
-      toolkit.elderPledgeStatus = "Waiting for click combo or building recovery";
       return false;
     }
     const price = Number(upgrade.getPrice?.());
@@ -4111,9 +4100,13 @@
     if (runGodzamokRebuild(now)) return;
     if (runFtHoFTowerRebuild(now)) return;
 
-    // Recover sacrificed buildings before saving for the next Elder Pledge.
-    // Once restored, prevent unrelated purchases from draining pledge funds.
-    if (getPendingElderPledge()) return;
+    // Prefer the tiny repeatable pledge whenever it is affordable, even
+    // during a click combo or while other buildings are being restored.
+    if (getPendingElderPledge()) {
+      if (runElderPledgeAutomation()) return;
+      // The pledge is not affordable yet; keep savings ahead of normal buys.
+      return;
+    }
 
     if (now - toolkit.lastPurchaseAt < AUTO_BUY_COOLDOWN_MS) return;
 

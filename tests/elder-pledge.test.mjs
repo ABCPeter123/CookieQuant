@@ -53,14 +53,30 @@ test('available repeatable pledge does not depend on old unlocked/bought flags',
   assert.equal(state.buyCalls,1);
 });
 
-test('does not purchase while active, hidden, disabled, or recovery is pending',()=>{
-  for(const config of [{pledgeT:300},{covenant:true},{active:false},
-      {inShop:false},{canBuy:false},{clickBuff:true},{recovery:true},
-      {ascending:true},{cookies:99},{price:Infinity}]){
+test('does not purchase while active, missing from shop, disabled, or unaffordable',()=>{
+  for(const config of [{pledgeT:300},{covenant:true,inShop:false},{active:false},
+      {inShop:false},{canBuy:false},{ascending:true},
+      {cookies:99},{price:Infinity}]){
     const state=scenario(config);
     assert.equal(state.run(),false,JSON.stringify(config));
     assert.equal(state.buyCalls,0,JSON.stringify(config));
   }
+});
+
+test('buys immediately even in click frenzy, Godzamok recovery, or tower restoration',()=>{
+  const duringCombo=scenario({clickBuff:true,recovery:true});
+  assert.equal(duringCombo.run(),true);
+  assert.equal(duringCombo.buyCalls,1);
+  const duringRecovery=scenario({clickBuff:false,recovery:true});
+  duringRecovery.toolkit.ftHofTowerRebuildRemaining=100;
+  assert.equal(duringRecovery.run(),true);
+  assert.equal(duringRecovery.buyCalls,1);
+});
+
+test('in-store availability takes precedence over stale Elder Covenant flag',()=>{
+  const state=scenario({covenant:true,inShop:true});
+  assert.equal(state.run(),true);
+  assert.equal(state.buyCalls,1);
 });
 
 test('reserves ordinary autobuy spending until an expired pledge is affordable',()=>{
@@ -89,7 +105,11 @@ test('toggle, status, timer, savings priority and cleanup remain wired',()=>{
   assert.match(source,/autoElderPledgeInput\.addEventListener\("change"/);
   assert.match(source,/toolkit\.elderPledgeTimer = setInterval\(runElderPledgeAutomation, ELDER_PLEDGE_CHECK_MS\)/);
   assert.match(source,/clearInterval\(toolkit\.elderPledgeTimer\)/);
-  assert.match(source,/if \(getPendingElderPledge\(\)\) return;/);
+  assert.match(source,/if \(getPendingElderPledge\(\)\) \{/);
+  assert.match(source,/runElderPledgeAutomation\(\)/);
+  assert.doesNotMatch(code,/toolkit\.godzamokRebuildQueue\.length/);
+  assert.doesNotMatch(code,/isClickRelatedBuffActive\(\)/);
+  assert.match(source,/const ELDER_PLEDGE_CHECK_MS = 200;/);
   const autobuy = source.slice(source.indexOf('  toolkit.autoBuyTimer = setInterval('));
   assert.ok(autobuy.indexOf('runGodzamokRebuild(now)') <
     autobuy.indexOf('getPendingElderPledge()'), 'never delay Godzamok recovery for Elder Pledge');
