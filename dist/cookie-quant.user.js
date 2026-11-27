@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.26.3
+// @version      2026.11.26.4
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.3" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.4" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.26.3";
+        const TOOLKIT_VERSION = "2026.11.26.4";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -3219,8 +3219,18 @@
           const recentClicks = toolkit.samples.filter(sample => sample.time >= now - 1000).length;
           const rate = Math.min(clicksPerSecond, recentClicks) *
             (controls.godzamokObjective === "combo" ? 1 : GODZAMOK_FORECAST_RATE_FRACTION);
-          if (now - toolkit.started < 2000 || !latest || now - latest.time > 500 || !(rate > 0)) return null;
-          if (Game.hasBuff?.("Cursed finger") || Game.recalculateGains) return null;
+          if (now - toolkit.started < 2000 || !latest || now - latest.time > 500 || !(rate > 0)) {
+            toolkit.godzamokStatus = "Waiting for recent measured clicks";
+            return null;
+          }
+          if (Game.hasBuff?.("Cursed finger")) {
+            toolkit.godzamokStatus = "Skipping Cursed finger: special click income is not forecast reliably";
+            return null;
+          }
+          if (Game.recalculateGains) {
+            toolkit.godzamokStatus = "Waiting for game gains to recalculate";
+            return null;
+          }
       
           const active = Object.entries(Game.buffs || {})
             .map(([name, buff]) => ({ ...buff, name: buff.name || name }))
@@ -3229,16 +3239,31 @@
             String(buff.name).toLowerCase() !== "devastation" && isClickPowerBuff(buff)
           );
           // Do not retrigger from our own Devastation, or pay to stack it repeatedly.
-          if (!trigger || Game.hasBuff?.("Devastation")) return null;
+          if (!trigger) {
+            toolkit.godzamokStatus = "Waiting for a real click multiplier (not regular Frenzy)";
+            return null;
+          }
+          if (Game.hasBuff?.("Devastation")) {
+            toolkit.godzamokStatus = "Devastation already active; another sale cannot extend its timer";
+            return null;
+          }
       
-          // Credit only time before ANY current effect expires. No speculative tail.
-          const horizon = Math.min(10, ...active.map(getBuffSecondsLeft));
+          // Only buffs contributing to the current click value limit the forecast.
+          // An unrelated short buff must not suppress a longer Click Frenzy.
+          const relevant = active.filter(buff =>
+            isClickPowerBuff(buff) ||
+            (Number.isFinite(Number(buff.multCpS)) && Number(buff.multCpS) > 0 &&
+              Number(buff.multCpS) !== 1));
+          const horizon = Math.min(10, ...relevant.map(getBuffSecondsLeft));
           const latency = Math.max(0.25, (toolkit.godzamokTransactionMs || 0) / 1000 * 2);
           const seconds = Math.max(horizon - latency, 0);
           const perClick = Number(Game.computedMouseCps);
           const gain = getGodzamokClickGainPerBuilding();
           if (!(seconds >= 1) || !(perClick > 0) || !(gain > 0) ||
-              !Number.isFinite(perClick)) return null;
+              !Number.isFinite(perClick)) {
+            toolkit.godzamokStatus = "Skipping: clicking bonus too short or click value unavailable";
+            return null;
+          }
           return {
             rate, averageRate: clicksPerSecond, seconds, horizon, latency, perClick, gain,
             valuePerBuilding: rate * perClick * gain * seconds,
@@ -3326,6 +3351,50 @@
           if (!sold) return null;
           const plan=scoreGodzamokCandidate(cost,sold,forecast,budget);
           return plan ? {...plan,quantities} : null;
+        }
+      
+        /*
+         * Fast single-building fallback when the exhaustive cost frontier is still
+         * running or has been invalidated by a recent purchase. It only ever uses
+         * the exact same bank, reserve, profitability and recovery gates.
+         * Individual prices are accumulated in O(buildings * quantity) time.
+         */
+        function selectGodzamokQuickPlan(forecast, budget) {
+          if (!(budget >= 0) || !Number.isFinite(budget)) return null;
+          let best = null;
+          for (const name of GODZAMOK_BUILDINGS) {
+            const building = Game.Objects?.[name];
+            if (!building || building.locked ||
+                typeof building.getPrice !== "function" ||
+                typeof building.getSellMultiplier !== "function" ||
+                typeof building.sell !== "function" || typeof building.buy !== "function") continue;
+            const {amount,maxSell} = getGodzamokSaleLimits(building);
+            if (!(maxSell > 0)) continue;
+            const sellMultiplier = Number(building.getSellMultiplier());
+            if (!(sellMultiplier >= 0) || !Number.isFinite(sellMultiplier)) continue;
+            const quote = Object.create(building);
+            let buyCost = 0, refund = 0;
+            for (let quantity = 1; quantity <= Math.min(maxSell,1000); quantity++) {
+              quote.amount = amount - quantity + 1;
+              const saleUnit = Number(building.getPrice.call(quote));
+              quote.amount = amount - quantity;
+              const buyUnit = Number(building.getPrice.call(quote));
+              if (!(saleUnit >= 0) || !(buyUnit >= 0) ||
+                  !Number.isFinite(saleUnit + buyUnit)) break;
+              refund += Math.floor(saleUnit * sellMultiplier);
+              buyCost += buyUnit;
+              const cost = buyCost - refund;
+              if (!Number.isFinite(cost) || cost < -Math.max(1,buyCost*1e-12)) break;
+              if (cost > budget) break;
+              if (quantity > 10 && quantity % 10 !== 0 && quantity !== maxSell) continue;
+              const candidate = scoreGodzamokCandidate(Math.max(cost,0),quantity,forecast,budget);
+              if (candidate && (!best || candidate.score > best.score ||
+                  (candidate.score === best.score && candidate.cost < best.cost))) {
+                best = {...candidate, quantities:new Map([[name,quantity]])};
+              }
+            }
+          }
+          return best;
         }
       
         function quoteGodzamokRoundTrip(building, quantity) {
@@ -3590,16 +3659,19 @@
           }
           // Prepare the cost frontier BETWEEN combos, so a ten-second buff need not
           // wait for a full search. Only changing building amounts/prices invalidates it.
-          if (Game.hasBuff?.("Devastation")) return;
+          if (Game.hasBuff?.("Devastation")) {
+            toolkit.godzamokStatus = "Devastation already active; waiting for next clicking buff";
+            return;
+          }
           const now = performance.now();
           if (now < (toolkit.godzamokNextPlanAt || 0)) return;
           try {
             if (controls.godzamokObjective === "all") {
               const forecast=getGodzamokForecast();
-              if (!forecast) {toolkit.godzamokStatus="Sell all ready; waiting for click combo";return;}
+              if (!forecast) return;
               toolkit.godzamokNextPlanAt=performance.now()+1000;
               const plan=getGodzamokSellAllPlan(forecast, Number(Game.cookies) - Number(getReserve()));
-              if (!plan) {toolkit.godzamokStatus="No allowed buildings available or invalid sale quote";return;}
+              if (!plan) {toolkit.godzamokStatus="Skipped: full sell/rebuy cost exceeds expected combo return or bank reserve";return;}
               sellForGodzamok(plan);
               return;
             }
@@ -3613,7 +3685,27 @@
                 result = toolkit.godzamokPlanner.next();
               } while (!result.done && performance.now() - sliceStarted < 8);
               if (!result.done) {
-                toolkit.godzamokStatus = "Preparing optimal combo sacrifice";
+                // A short Click Frenzy must not be lost waiting for a large search.
+                // Only attempt the quick plan if a click-related buff is running.
+                const quickBuff = getActiveClickPowerBuffs().some(buff =>
+                  String(buff.name).toLowerCase() !== "devastation");
+                if (quickBuff) {
+                  const quickForecast = getGodzamokForecast();
+                  if (quickForecast) {
+                    const quick = selectGodzamokQuickPlan(quickForecast,
+                      Number(Game.cookies) - Number(getReserve()));
+                    if (quick) {
+                      toolkit.godzamokNextPlanAt = performance.now() + 1000;
+                      const sold = sellForGodzamok(quick);
+                      if (sold) {
+                        toolkit.godzamokPlanner = null;
+                        toolkit.godzamokFrontier = null;
+                        return;
+                      }
+                    }
+                    toolkit.godzamokStatus = "Skipping: no quick profitable sacrifice; finishing full search";
+                  }
+                } else toolkit.godzamokStatus = "Preparing optimal combo sacrifice";
                 return;
               }
               toolkit.godzamokPlanner = null;
@@ -3625,15 +3717,12 @@
               toolkit.godzamokFrontier = frontier;
             }
             const forecast = getGodzamokForecast();
-            if (!forecast) {
-              toolkit.godzamokStatus = "Plan ready; waiting for click combo and measured clicks";
-              return;
-            }
+            if (!forecast) return;
             toolkit.godzamokNextPlanAt = performance.now() + 1000;
             const plan = selectGodzamokPlan(frontier, forecast,
               Number(Game.cookies) - Number(getReserve()));
             if (!plan) {
-              toolkit.godzamokStatus = "Skip: no sacrifice meets the selected goal and reserve limits";
+              toolkit.godzamokStatus = "Skipping click buff: no profitable sacrifice within bank reserve";
               return;
             }
             sellForGodzamok(plan);
