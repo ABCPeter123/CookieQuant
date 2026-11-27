@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.26.1
+// @version      2026.11.26.2
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.1" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.2" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.26.1";
+        const TOOLKIT_VERSION = "2026.11.26.2";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -3371,9 +3371,11 @@
             controls.godzamokConfidence = Math.max(0.25, Math.min(1, old * Math.min(ratio, 1.05)));
             saveControls();
           }
-          if ((incomplete && !ledger.restoreDeferred) || (ledger.objective === "prestige"
+          // A measured loss pauses any profit-seeking mode, including full-sale.
+          // Never let a partially restored or unverified transaction trigger another.
+          if (incomplete || (ledger.objective === "prestige"
               ? -ledger.net > ledger.lossLimit + ledger.interruptionCost + Math.max(1, ledger.lossLimit * 1e-12)
-              : ["combo","all"].includes(ledger.objective) ? false : ledger.net <= 0)) {
+              : ledger.net <= 0)) {
             pauseGodzamokAfterLoss(incomplete
               ? "Paused: sacrifice could not be fully verified/restored"
               : `Paused: last sacrifice lost ${compactNumber(-ledger.net)}; review Diagnostics`);

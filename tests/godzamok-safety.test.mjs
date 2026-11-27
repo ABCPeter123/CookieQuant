@@ -41,4 +41,6 @@ test('legacy sell-all becomes profit mode and pending recovery blocks autobuy',(
   const after=source.indexOf('function runFtHoFTowerRebuild(now)',before);
   const rebuild=source.slice(before,after);
   assert.match(rebuild,/if \(toolkit\.godzamokRebuildQueue\.length > 0\)[\s\S]*?return true;/);
+  assert.match(source,/if \(incomplete \|\| \(ledger\.objective === "prestige"/);
+  assert.doesNotMatch(source,/\["combo","all"\]\.includes\(ledger\.objective\) \? false/);
 });

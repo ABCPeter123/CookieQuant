@@ -1,5 +1,5 @@
 (() => {
-  const TOOLKIT_VERSION = "2026.11.26.1";
+  const TOOLKIT_VERSION = "2026.11.26.2";
   /*
    * COOKIE CLICKER TOOLKIT
    * Paste this entire file into the browser console.
@@ -3345,9 +3345,11 @@
       controls.godzamokConfidence = Math.max(0.25, Math.min(1, old * Math.min(ratio, 1.05)));
       saveControls();
     }
-    if ((incomplete && !ledger.restoreDeferred) || (ledger.objective === "prestige"
+    // A measured loss pauses any profit-seeking mode, including full-sale.
+    // Never let a partially restored or unverified transaction trigger another.
+    if (incomplete || (ledger.objective === "prestige"
         ? -ledger.net > ledger.lossLimit + ledger.interruptionCost + Math.max(1, ledger.lossLimit * 1e-12)
-        : ["combo","all"].includes(ledger.objective) ? false : ledger.net <= 0)) {
+        : ledger.net <= 0)) {
       pauseGodzamokAfterLoss(incomplete
         ? "Paused: sacrifice could not be fully verified/restored"
         : `Paused: last sacrifice lost ${compactNumber(-ledger.net)}; review Diagnostics`);
