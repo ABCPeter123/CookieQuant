@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CookieQuant | Cookie Clicker Automation
 // @namespace    https://github.com/ABCPeter123/CookieQuant
-// @version      2026.11.26.2
+// @version      2026.11.26.3
 // @description  Monte Carlo trading, risk-aware automation, Garden, Godzamok, dragon, and ascension helpers.
 // @author       ABCPeter123
 // @license      MIT
@@ -21,11 +21,11 @@
   if (window.top !== window.self) return;
   let checks = 0;
   const boot = () => {
-    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.2" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
+    if (window.cookieClickToolkit?.active && window.cookieClickToolkit.version === "2026.11.26.3" && typeof window.cookieClickToolkit?.telemetry?.connect === "function") return true;
     if (!window.Game?.ready || !document.body) return false;
     try {
       (() => {
-        const TOOLKIT_VERSION = "2026.11.26.2";
+        const TOOLKIT_VERSION = "2026.11.26.3";
         /*
          * COOKIE CLICKER TOOLKIT
          * Paste this entire file into the browser console.
@@ -173,6 +173,8 @@
           DEFAULT_STRATEGY_PROFILE.protectShinyWrinklers;
         const WRINKLER_CHECK_MS = 1000;
         const WRINKLER_POP_COOLDOWN_MS = 2000;
+        const AUTO_ELDER_PLEDGE = true;
+        const ELDER_PLEDGE_CHECK_MS = 1000;
       
         /* SUGAR LUMP AUTOMATION */
         const AUTO_MANAGE_SUGAR_LUMPS = true;
@@ -593,6 +595,10 @@
             typeof savedControls.autoBuyUpgrades === "boolean"
               ? savedControls.autoBuyUpgrades
               : AUTO_BUY_UPGRADES,
+          autoElderPledge:
+            typeof savedControls.autoElderPledge === "boolean"
+              ? savedControls.autoElderPledge
+              : AUTO_ELDER_PLEDGE,
           autoBuyWizardTowers:
             typeof savedControls.autoBuyWizardTowers === "boolean"
               ? savedControls.autoBuyWizardTowers
@@ -805,6 +811,7 @@
           dragonTimer: null,
           dragonDropTimer: null,
           autoBuyTimer: null,
+          elderPledgeTimer: null,
           wrinklerTimer: null,
           ascensionTimer: null,
           gardenTimer: null,
@@ -821,6 +828,8 @@
           lastLumpAction: "None",
           forceHandStatus: "Waiting for Grimoire",
           godzamokStatus: "Waiting for Click Frenzy",
+          elderPledgeStatus: "Waiting for Elder Pact",
+          lastElderPledgeAt: -Infinity,
           godzamokPlanner: null,
           godzamokFrontier: null,
           godzamokNextPlanAt: 0,
@@ -1532,6 +1541,9 @@
             for (let index = 0; index < (Game.UpgradesInStore || []).length; index++) {
               const upgrade = Game.UpgradesInStore[index];
               if (!upgrade || upgrade.bought) continue;
+              // Dedicated Elder Pledge automation owns repeat purchases. Never
+              // purchase Elder Covenant as a side effect of normal upgrading.
+              if (upgrade.name === "Elder Pledge" || upgrade.name === "Elder Covenant") continue;
               if (!AUTO_BUY_ONE_MIND && upgrade.name === "One mind") continue;
               if (isBlockedByGrandmapocalypseStageCap(upgrade)) continue;
               if (!AUTO_BUY_TOGGLE_UPGRADES && upgrade.pool === "toggle") continue;
@@ -3890,7 +3902,9 @@
                 if (!upgrade || upgrade.bought || upgrade.pool === "prestige" ||
                     upgrade.pool === "toggle" ||
                     (!AUTO_BUY_ONE_MIND && upgrade.name === "One mind") ||
-                    isBlockedByGrandmapocalypseStageCap(upgrade)) continue;
+                    isBlockedByGrandmapocalypseStageCap(upgrade) ||
+                    upgrade.name === "Elder Pledge" ||
+                    upgrade.name === "Elder Covenant") continue;
                 const price = Number(upgrade.getPrice());
                 if (!Number.isFinite(price) || price < 0) continue;
                 const target = {type:"upgrade", item:upgrade, name:upgrade.name, price, research:isResearchUpgrade(upgrade)};
@@ -3933,6 +3947,80 @@
           }
           return purchases;
         }
+      
+        /*
+         * Elder Pledge is a repeatable switch, not a permanent research purchase.
+         * Buy it again once the previous pledge expires, but never auto-buy the
+         * permanent Elder Covenant or spend a protected bank reserve.
+         */
+        function runElderPledgeAutomation() {
+          if (!toolkit.active || !controls.autoElderPledge) {
+            toolkit.elderPledgeStatus = "Off";
+            return false;
+          }
+          if (!controls.autoBuy || !controls.autoBuyUpgrades) {
+            toolkit.elderPledgeStatus = "Waiting for auto-buy and Buy upgrades";
+            return false;
+          }
+          if (isAscensionAutomationBusy() || Game.OnAscend ||
+              Game.AscendTimer || Game.ReincarnateTimer || Game.promptOn ||
+              Game.buyMode !== 1) return false;
+      
+          // The game counts pledge duration in frames. A positive timer means
+          // it is already active, regardless of the shop item's bought flag.
+          const remaining = Math.max(0, Number(Game.pledgeT) || 0);
+          if (remaining > 0) {
+            const seconds = Math.ceil(remaining / Math.max(Number(Game.fps) || 30, 1));
+            toolkit.elderPledgeStatus = `Active; ${formatTime(seconds)} remaining`;
+            return false;
+          }
+          if (Game.Has?.("Elder Covenant")) {
+            toolkit.elderPledgeStatus = "Elder Covenant active; no pledge needed";
+            return false;
+          }
+          if (!Game.Has?.("Elder Pact")) {
+            toolkit.elderPledgeStatus = "Waiting for Elder Pact (stage 3)";
+            return false;
+          }
+          if (toolkit.godzamokRebuildQueue.length ||
+              toolkit.ftHofTowerRebuildRemaining > 0 ||
+              isClickRelatedBuffActive()) {
+            toolkit.elderPledgeStatus = "Waiting for active combo or building recovery";
+            return false;
+          }
+          if (performance.now() - toolkit.lastElderPledgeAt < 2500) return false;
+      
+          const upgrade = Game.Upgrades?.["Elder Pledge"];
+          if (!upgrade || !upgrade.unlocked || upgrade.bought ||
+              !(Game.UpgradesInStore || []).includes(upgrade) ||
+              typeof upgrade.canBuy !== "function" || !upgrade.canBuy()) {
+            toolkit.elderPledgeStatus = "Waiting for Elder Pledge in shop";
+            return false;
+          }
+          const price = Number(upgrade.getPrice?.());
+          if (!Number.isFinite(price) || price < 0) return false;
+          const target = {type: "upgrade", item: upgrade, name: upgrade.name, price};
+          if (!canBuyWithoutBreakingReserve(target)) {
+            toolkit.elderPledgeStatus = `Saving for Elder Pledge (${compactNumber(price)} cookies, reserve protected)`;
+            return false;
+          }
+      
+          const beforePledges = Number(Game.pledges) || 0;
+          upgrade.buy();
+          if (!(Number(Game.pledgeT) > 0 || (Number(Game.pledges) || 0) > beforePledges)) {
+            toolkit.elderPledgeStatus = "Purchase did not activate; retrying when available";
+            return false;
+          }
+          toolkit.lastElderPledgeAt = performance.now();
+          toolkit.lastPurchaseAt = toolkit.lastElderPledgeAt;
+          toolkit.lastPurchaseName = "Elder Pledge";
+          toolkit.lastPurchasePrice = price;
+          toolkit.targetSnapshotAt = -Infinity;
+          toolkit.elderPledgeStatus = "Renewed Elder Pledge";
+          return true;
+        }
+        toolkit.elderPledgeTimer = setInterval(runElderPledgeAutomation, ELDER_PLEDGE_CHECK_MS);
+        runElderPledgeAutomation();
       
         toolkit.autoBuyTimer = setInterval(() => {
           if (!toolkit.active || !controls.autoBuy) return;
@@ -5282,6 +5370,7 @@
                   <div style="font-weight:bold;margin-bottom:4px">Banks and Grandmapocalypse</div>
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><span>Chain reserve</span><input id="cct-chain-protection" type="checkbox"></label>
                   <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0"><span>Protect shiny wrinklers</span><input id="cct-protect-shiny-wrinklers" type="checkbox"></label>
+                  <label style="display:flex;justify-content:space-between;align-items:center;margin:4px 0" title="Automatically renew Elder Pledge after it expires, once Elder Pact is unlocked. Requires Auto-buy master and Buy upgrades; protects your bank reserve. Never buys Elder Covenant."><span>Auto Elder Pledge</span><input id="cct-auto-elder-pledge" type="checkbox"></label>
                   <label style="display:block;margin:8px 0 3px">Grandmapocalypse cap
                     <select id="cct-grandmapocalypse-stage" style="width:100%;margin-top:2px;background:#222;color:#fff;border:1px solid #777;padding:3px">
                       <option value="0">Stage 0, block One mind</option><option value="1">Stage 1, allow One mind</option><option value="2">Stage 2, allow Brainsweep</option><option value="3">Stage 3, allow Elder Pact</option>
@@ -5622,6 +5711,7 @@
             "#cct-grandmapocalypse-stage"
           );
           const wrinklerModeSelect = panel.querySelector("#cct-wrinkler-mode");
+          const autoElderPledgeInput = panel.querySelector("#cct-auto-elder-pledge");
           const prioritySelect = panel.querySelector("#cct-priority");
           const reserveSelect = panel.querySelector("#cct-reserve");
           const ascensionModeSelect = panel.querySelector("#cct-ascension-mode");
@@ -5711,6 +5801,7 @@
           dragonDropsInput.checked = controls.dragonDrops;
           dragonModeSelect.value = controls.dragonMode;
           protectShinyWrinklersInput.checked = controls.protectShinyWrinklers;
+          autoElderPledgeInput.checked = controls.autoElderPledge;
           grandmapocalypseStageSelect.value = String(
             controls.grandmapocalypseStageCap
           );
@@ -5745,6 +5836,7 @@
             wrinklerModeSelect.value = controls.wrinklerMode;
             protectShinyWrinklersInput.checked =
               controls.protectShinyWrinklers;
+            autoElderPledgeInput.checked = controls.autoElderPledge;
             ascensionPlanSelect.value = controls.ascensionPlanId;
             ascensionAdaptiveInput.checked = controls.ascensionAdaptiveTarget;
             ascensionTargetInput.disabled = false;
@@ -5875,6 +5967,11 @@
             controls.protectShinyWrinklers = protectShinyWrinklersInput.checked;
             saveControls();
             runWrinklerAutomation();
+          });
+          autoElderPledgeInput.addEventListener("change", () => {
+            controls.autoElderPledge = autoElderPledgeInput.checked;
+            saveControls();
+            runElderPledgeAutomation();
           });
           grandmapocalypseStageSelect.addEventListener("change", () => {
             controls.grandmapocalypseStageCap = Number(
@@ -6076,6 +6173,7 @@
               Reserve ETA: ${formatTime(reserveEta)}<br>
               Last purchase: ${toolkit.lastPurchaseName}<br>
               Grandmapocalypse: stage ${ownedGrandmapocalypseStage}, cap ${controls.grandmapocalypseStageCap}<br>
+              Elder Pledge: ${toolkit.elderPledgeStatus}<br>
               Wrinklers: ${wrinklers.attached}/${wrinklers.max}, stored ${compactNumber(wrinklers.stored)}${
                 wrinklers.shinyCount > 0
                   ? `, ${wrinklers.shinyCount} shiny`
@@ -6263,6 +6361,7 @@
           clearInterval(toolkit.seasonAuraTimer);
           clearInterval(toolkit.dragonDropTimer);
           clearInterval(toolkit.autoBuyTimer);
+          clearInterval(toolkit.elderPledgeTimer);
           clearInterval(toolkit.wrinklerTimer);
           clearInterval(toolkit.ascensionTimer);
       
